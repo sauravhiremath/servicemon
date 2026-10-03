@@ -35,7 +35,10 @@ jobs:
           node --version
           npm --version
       - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
+      - run: npm run knip
       - run: npm run build
       - run: npx vitest run
       - run: npx --no-install playwright install chromium

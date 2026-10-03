@@ -13,8 +13,20 @@ it('reports a missing config as config-not-found for validate and startup', asyn
   const program = new Command().name('servicemon').option('--config <path>').exitOverride();
   program.configureOutput({ writeErr() {}, writeOut() {} });
   addDefinitionCommands(program);
-  const validate = await program.parseAsync(['config', 'validate', '--config', missing], { from: 'user' }).then(() => undefined, (error: unknown) => error);
-  if (!validate || typeof validate !== 'object' || !('code' in validate) || validate.code !== 'CONFIG_NOT_FOUND') throw validate;
+  const validate = await program
+    .parseAsync(['config', 'validate', '--config', missing], { from: 'user' })
+    .then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+  if (
+    !validate ||
+    typeof validate !== 'object' ||
+    !('code' in validate) ||
+    validate.code !== 'CONFIG_NOT_FOUND'
+  ) {
+    throw validate;
+  }
   expect(exitCode(validate.code)).toBe(2);
   await expect(loadCandidate(missing)).rejects.toMatchObject({ code: 'CONFIG_NOT_FOUND' });
 });

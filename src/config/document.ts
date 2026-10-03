@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { chmod, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
-import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { isMap, parseDocument, YAMLMap } from 'yaml';
-import type { CompiledConfig } from '../shared/types.js';
 import { AppError } from '../shared/errors.js';
+import type { CompiledConfig } from '../shared/types.js';
 import { compileConfig, qualifyReference } from './compile.js';
 import { ownStartedAt, processIdentity } from './process-identity.js';
 
@@ -19,11 +19,18 @@ export interface ConfigEdit {
 const NAME = /^[A-Za-z0-9_-]+$/;
 
 function assertName(value: string, label: string): void {
-  if (!NAME.test(value)) throw new AppError('INVALID_CONFIG', `${label} must use letters, digits, underscores, and hyphens.`);
+  if (!NAME.test(value)) {
+    throw new AppError(
+      'INVALID_CONFIG',
+      `${label} must use letters, digits, underscores, and hyphens.`,
+    );
+  }
 }
 
 function mapping(value: unknown, label: string): YAMLMap {
-  if (!isMap(value)) throw new AppError('INVALID_CONFIG', `${label} is not a mapping.`);
+  if (!isMap(value)) {
+    throw new AppError('INVALID_CONFIG', `${label} is not a mapping.`);
+  }
   return value;
 }
 
@@ -37,55 +44,118 @@ function childMap(parent: YAMLMap, key: string): YAMLMap {
   return mapping(current, key);
 }
 
-function collection(parent: YAMLMap, projectId: string | undefined, kind: ConfigEdit['kind']): YAMLMap {
+function collection(
+  parent: YAMLMap,
+  projectId: string | undefined,
+  kind: ConfigEdit['kind'],
+): YAMLMap {
   const projects = childMap(mapping(parent, 'root'), 'projects');
-  if (kind === 'project') return projects;
-  if (!projectId) throw new AppError('INVALID_INPUT', 'projectId is required.');
+  if (kind === 'project') {
+    return projects;
+  }
+  if (!projectId) {
+    throw new AppError('INVALID_INPUT', 'projectId is required.');
+  }
   const project = projects.get(projectId, true);
-  if (!isMap(project)) throw new AppError('UNKNOWN_ENTRY', `Unknown project ${projectId}.`);
+  if (!isMap(project)) {
+    throw new AppError('UNKNOWN_ENTRY', `Unknown project ${projectId}.`);
+  }
   const field = kind === 'service' ? 'services' : kind === 'task' ? 'tasks' : 'compose_groups';
   return childMap(project, field);
 }
 
 function removedId(edit: ConfigEdit): string {
-  if (edit.kind === 'project') return edit.key;
-  if (!edit.projectId) throw new AppError('INVALID_INPUT', 'projectId is required.');
-  return edit.kind === 'compose' ? `${edit.projectId}/${edit.key}.` : `${edit.projectId}/${edit.key}`;
+  if (edit.kind === 'project') {
+    return edit.key;
+  }
+  if (!edit.projectId) {
+    throw new AppError('INVALID_INPUT', 'projectId is required.');
+  }
+  return edit.kind === 'compose'
+    ? `${edit.projectId}/${edit.key}.`
+    : `${edit.projectId}/${edit.key}`;
 }
 
 function dependsOnValues(value: unknown): string[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !('depends_on' in value)) return [];
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('depends_on' in value)) {
+    return [];
+  }
   const depends = value.depends_on;
-  if (!Array.isArray(depends)) return [];
+  if (!Array.isArray(depends)) {
+    return [];
+  }
   return depends.filter((item): item is string => typeof item === 'string');
 }
 
 function referencesRemoved(edit: ConfigEdit, qualified: string, target: string): boolean {
-  if (edit.kind === 'project') return qualified.startsWith(`${target}/`);
-  if (edit.kind === 'compose') return qualified.startsWith(target);
+  if (edit.kind === 'project') {
+    return qualified.startsWith(`${target}/`);
+  }
+  if (edit.kind === 'compose') {
+    return qualified.startsWith(target);
+  }
   return qualified === target;
 }
 
 function assertUnreferenced(source: string, edit: ConfigEdit): void {
-  if (edit.action !== 'remove') return;
+  if (edit.action !== 'remove') {
+    return;
+  }
   const raw = parseDocument(source, { uniqueKeys: true }).toJS({ maxAliasCount: 100 });
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !('projects' in raw) || !raw.projects || typeof raw.projects !== 'object' || Array.isArray(raw.projects)) return;
+  if (
+    !raw ||
+    typeof raw !== 'object' ||
+    Array.isArray(raw) ||
+    !('projects' in raw) ||
+    !raw.projects ||
+    typeof raw.projects !== 'object' ||
+    Array.isArray(raw.projects)
+  ) {
+    return;
+  }
   const target = removedId(edit);
   for (const [projectId, project] of Object.entries(raw.projects)) {
-    if (!project || typeof project !== 'object' || Array.isArray(project)) continue;
+    if (!project || typeof project !== 'object' || Array.isArray(project)) {
+      continue;
+    }
     for (const [section, entries] of Object.entries(project)) {
-      if (section !== 'services' && section !== 'tasks' && section !== 'compose_groups') continue;
-      if (!entries || typeof entries !== 'object' || Array.isArray(entries)) continue;
+      if (section !== 'services' && section !== 'tasks' && section !== 'compose_groups') {
+        continue;
+      }
+      if (!entries || typeof entries !== 'object' || Array.isArray(entries)) {
+        continue;
+      }
       for (const [key, entry] of Object.entries(entries)) {
         for (const ref of dependsOnValues(entry)) {
           const qualified = qualifyReference(projectId, ref);
-          if (referencesRemoved(edit, qualified, target)) throw new AppError('INVALID_CONFIG', `Cannot remove ${edit.kind} ${edit.key}; ${projectId}/${key} still depends on ${qualified}.`);
+          if (referencesRemoved(edit, qualified, target)) {
+            throw new AppError(
+              'INVALID_CONFIG',
+              `Cannot remove ${edit.kind} ${edit.key}; ${projectId}/${key} still depends on ${qualified}.`,
+            );
+          }
         }
-        if (section !== 'compose_groups' || !entry || typeof entry !== 'object' || Array.isArray(entry) || !('services' in entry) || !entry.services || typeof entry.services !== 'object' || Array.isArray(entry.services)) continue;
+        if (
+          section !== 'compose_groups' ||
+          !entry ||
+          typeof entry !== 'object' ||
+          Array.isArray(entry) ||
+          !('services' in entry) ||
+          !entry.services ||
+          typeof entry.services !== 'object' ||
+          Array.isArray(entry.services)
+        ) {
+          continue;
+        }
         for (const [service, override] of Object.entries(entry.services)) {
           for (const ref of dependsOnValues(override)) {
             const qualified = qualifyReference(projectId, ref);
-            if (referencesRemoved(edit, qualified, target)) throw new AppError('INVALID_CONFIG', `Cannot remove ${edit.kind} ${edit.key}; ${projectId}/${key}.${service} still depends on ${qualified}.`);
+            if (referencesRemoved(edit, qualified, target)) {
+              throw new AppError(
+                'INVALID_CONFIG',
+                `Cannot remove ${edit.kind} ${edit.key}; ${projectId}/${key}.${service} still depends on ${qualified}.`,
+              );
+            }
           }
         }
       }
@@ -95,13 +165,19 @@ function assertUnreferenced(source: string, edit: ConfigEdit): void {
 
 export function proposeEdit(source: string, edit: ConfigEdit): string {
   assertName(edit.key, 'Key');
-  if (edit.projectId) assertName(edit.projectId, 'Project');
+  if (edit.projectId) {
+    assertName(edit.projectId, 'Project');
+  }
   const doc = parseDocument(source.trim() === '' ? 'version: 1\n' : source, { uniqueKeys: true });
-  if (doc.errors.length > 0) throw new AppError('INVALID_CONFIG', doc.errors[0]!.message);
+  if (doc.errors.length > 0) {
+    throw new AppError('INVALID_CONFIG', doc.errors[0]!.message);
+  }
   const root = mapping(doc.contents, 'Config');
   const target = collection(root, edit.projectId, edit.kind);
   if (edit.action === 'add') {
-    if (target.has(edit.key)) throw new AppError('INVALID_CONFIG', `${edit.kind} ${edit.key} already exists.`);
+    if (target.has(edit.key)) {
+      throw new AppError('INVALID_CONFIG', `${edit.kind} ${edit.key} already exists.`);
+    }
     target.set(edit.key, edit.fields ?? {});
   } else if (!target.has(edit.key)) {
     throw new AppError('UNKNOWN_ENTRY', `Unknown ${edit.kind} ${edit.key}.`);
@@ -113,23 +189,47 @@ export function proposeEdit(source: string, edit: ConfigEdit): string {
   return proposed;
 }
 function isCompiledConfig(value: unknown): value is CompiledConfig {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
   const record = value as Partial<CompiledConfig>;
-  return Array.isArray(record.entries) && Array.isArray(record.projects) && typeof record.path === 'string';
+  return (
+    Array.isArray(record.entries) &&
+    Array.isArray(record.projects) &&
+    typeof record.path === 'string'
+  );
 }
 
 function isEdit(value: unknown): value is ConfigEdit {
-  if (!value || typeof value !== 'object' || !('kind' in value) || !('action' in value) || !('key' in value)) return false;
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('kind' in value) ||
+    !('action' in value) ||
+    !('key' in value)
+  ) {
+    return false;
+  }
   const { kind, action, key } = value;
-  return (kind === 'project' || kind === 'service' || kind === 'task' || kind === 'compose') && (action === 'add' || action === 'remove') && typeof key === 'string';
+  return (
+    (kind === 'project' || kind === 'service' || kind === 'task' || kind === 'compose') &&
+    (action === 'add' || action === 'remove') &&
+    typeof key === 'string'
+  );
 }
 
 export function proposedEdit(source: string, edit: unknown): string {
-  if (!isEdit(edit)) throw new AppError('INVALID_INPUT', 'Config edit is not valid.');
+  if (!isEdit(edit)) {
+    throw new AppError('INVALID_INPUT', 'Config edit is not valid.');
+  }
   return proposeEdit(source, edit);
 }
 
-export async function commitConfig(filePath: string, expectedSource: string, proposed: string): Promise<void> {
+export async function commitConfig(
+  filePath: string,
+  expectedSource: string,
+  proposed: string,
+): Promise<void> {
   const absolute = path.resolve(filePath);
   const release = await acquireConfigLock(absolute);
   try {
@@ -137,9 +237,16 @@ export async function commitConfig(filePath: string, expectedSource: string, pro
     try {
       current = await readFile(absolute, 'utf8');
     } catch (error) {
-      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
+        throw error;
+      }
     }
-    if (current !== expectedSource) throw new AppError('STALE_CONFIG', 'Config changed before replacement. The new file was kept.');
+    if (current !== expectedSource) {
+      throw new AppError(
+        'STALE_CONFIG',
+        'Config changed before replacement. The new file was kept.',
+      );
+    }
     const mode = current === undefined ? 0o600 : (await stat(absolute)).mode & 0o777;
     await atomicWrite(absolute, proposed, mode);
   } finally {
@@ -153,7 +260,9 @@ async function fingerprint(filePath: string): Promise<string | undefined> {
     const info = await stat(filePath);
     return `${info.ino}:${createHash('sha256').update(body).digest('hex')}`;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return undefined;
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return undefined;
+    }
     throw error;
   }
 }
@@ -161,7 +270,10 @@ async function fingerprint(filePath: string): Promise<string | undefined> {
 async function atomicWrite(filePath: string, body: string, mode: number): Promise<void> {
   const directory = path.dirname(filePath);
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  const temporary = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`);
+  const temporary = path.join(
+    directory,
+    `.${path.basename(filePath)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`,
+  );
   const handle = await open(temporary, 'wx', mode);
   try {
     await handle.writeFile(body);
@@ -185,9 +297,12 @@ function lockFields(body: string): { pid?: number; startedAt?: string } {
   } catch {
     return {};
   }
-  if (!parsed || typeof parsed !== 'object') return {};
+  if (!parsed || typeof parsed !== 'object') {
+    return {};
+  }
   const pid = 'pid' in parsed && typeof parsed.pid === 'number' ? parsed.pid : undefined;
-  const startedAt = 'startedAt' in parsed && typeof parsed.startedAt === 'string' ? parsed.startedAt : undefined;
+  const startedAt =
+    'startedAt' in parsed && typeof parsed.startedAt === 'string' ? parsed.startedAt : undefined;
   return { pid, startedAt };
 }
 
@@ -210,27 +325,47 @@ async function acquireConfigLock(filePath: string): Promise<() => Promise<void>>
       }
       return async () => {
         const current = await readFile(lockPath, 'utf8').catch(() => '');
-        if (current.includes(token)) await rm(lockPath, { force: true });
+        if (current.includes(token)) {
+          await rm(lockPath, { force: true });
+        }
       };
     } catch (error) {
-      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST')) throw error;
-      const { pid, startedAt: ownerStarted } = lockFields(await readFile(lockPath, 'utf8').catch(() => ''));
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST')) {
+        throw error;
+      }
+      const { pid, startedAt: ownerStarted } = lockFields(
+        await readFile(lockPath, 'utf8').catch(() => ''),
+      );
       if (pid === undefined || ownerStarted === undefined) {
         const info = await stat(lockPath).catch(() => undefined);
-        if (!info || Date.now() - info.mtimeMs > 5000) await rm(lockPath, { force: true });
-        else await delay(50);
+        if (!info || Date.now() - info.mtimeMs > 5000) {
+          await rm(lockPath, { force: true });
+        } else {
+          await delay(50);
+        }
         continue;
       }
       const identity = await processIdentity(pid);
-      if (identity.state === 'uncertain') throw new AppError('CONFIG_BUSY', 'Config lock owner is uncertain. The file was not changed.');
-      if (identity.state === 'alive' && identity.startedAt === ownerStarted) throw new AppError('CONFIG_BUSY', 'Config is being edited by another process.');
+      if (identity.state === 'uncertain') {
+        throw new AppError(
+          'CONFIG_BUSY',
+          'Config lock owner is uncertain. The file was not changed.',
+        );
+      }
+      if (identity.state === 'alive' && identity.startedAt === ownerStarted) {
+        throw new AppError('CONFIG_BUSY', 'Config is being edited by another process.');
+      }
       await rm(lockPath, { force: true });
     }
   }
   throw new AppError('CONFIG_BUSY', 'Could not acquire the config lock.');
 }
 
-export async function editConfig(filePath: string, edit: ConfigEdit, validate?: (source: string) => Promise<unknown>): Promise<CompiledConfig> {
+export async function editConfig(
+  filePath: string,
+  edit: ConfigEdit,
+  validate?: (source: string) => Promise<unknown>,
+): Promise<CompiledConfig> {
   const absolute = path.resolve(filePath);
   const release = await acquireConfigLock(absolute);
   try {
@@ -246,7 +381,12 @@ export async function editConfig(filePath: string, edit: ConfigEdit, validate?: 
     const proposed = proposeEdit(source, edit);
     const validated = validate ? await validate(proposed) : undefined;
     const compiled = isCompiledConfig(validated) ? validated : compileConfig(proposed, absolute);
-    if (await fingerprint(absolute) !== before) throw new AppError('STALE_CONFIG', 'Config changed before replacement. The new file was kept.');
+    if ((await fingerprint(absolute)) !== before) {
+      throw new AppError(
+        'STALE_CONFIG',
+        'Config changed before replacement. The new file was kept.',
+      );
+    }
     await atomicWrite(absolute, proposed, mode);
     return compiled;
   } finally {

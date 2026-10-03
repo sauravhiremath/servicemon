@@ -5,18 +5,32 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
-const {values}=parseArgs({options:{manifest:{type:'string'},tap:{type:'string'},url:{type:'string'}}});
-assert(values.manifest && values.tap,'Use --manifest and --tap with a checked candidate and the local tap directory.');
-const manifest=JSON.parse(await readFile(values.manifest,'utf8'));
-assert.match(manifest.version,/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/);
-assert.match(manifest.sha256,/^[a-f0-9]{64}$/);
-assert.equal(manifest.archive,`servicemon-${manifest.version}-source.tar.gz`);
-const archive=path.resolve(path.dirname(values.manifest),manifest.archive);
-assert.equal(createHash('sha256').update(await readFile(archive)).digest('hex'),manifest.sha256,'Candidate checksum differs.');
-const publicUrl=`https://github.com/sauravhiremath/servicemon/releases/download/v${manifest.version}/${manifest.archive}`;
-const url=values.url ?? pathToFileURL(archive).href;
-assert(url===publicUrl || url===pathToFileURL(archive).href,'Use the immutable release URL or this exact local candidate.');
-const formula=`class Servicemon < Formula
+const { values } = parseArgs({
+  options: { manifest: { type: 'string' }, tap: { type: 'string' }, url: { type: 'string' } },
+});
+assert(
+  values.manifest && values.tap,
+  'Use --manifest and --tap with a checked candidate and the local tap directory.',
+);
+const manifest = JSON.parse(await readFile(values.manifest, 'utf8'));
+assert.match(manifest.version, /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/);
+assert.match(manifest.sha256, /^[a-f0-9]{64}$/);
+assert.equal(manifest.archive, `servicemon-${manifest.version}-source.tar.gz`);
+const archive = path.resolve(path.dirname(values.manifest), manifest.archive);
+assert.equal(
+  createHash('sha256')
+    .update(await readFile(archive))
+    .digest('hex'),
+  manifest.sha256,
+  'Candidate checksum differs.',
+);
+const publicUrl = `https://github.com/sauravhiremath/servicemon/releases/download/v${manifest.version}/${manifest.archive}`;
+const url = values.url ?? pathToFileURL(archive).href;
+assert(
+  url === publicUrl || url === pathToFileURL(archive).href,
+  'Use the immutable release URL or this exact local candidate.',
+);
+const formula = `class Servicemon < Formula
   desc "Control local development services with a CLI and dashboard"
   homepage "https://github.com/sauravhiremath/servicemon"
   url ${JSON.stringify(url)}
@@ -70,7 +84,9 @@ const formula=`class Servicemon < Formula
   end
 end
 `;
-const directory=path.resolve(values.tap,'Formula');
-await mkdir(directory,{recursive:true});
-await writeFile(path.join(directory,'servicemon.rb'),formula,{flag:'wx'});
-console.log(`Generated ${path.join(directory,'servicemon.rb')}\nSHA-256: ${manifest.sha256}\nRelease URL: ${publicUrl}\nPreserve each formula with its matching source archive for recovery.`);
+const directory = path.resolve(values.tap, 'Formula');
+await mkdir(directory, { recursive: true });
+await writeFile(path.join(directory, 'servicemon.rb'), formula, { flag: 'wx' });
+console.log(
+  `Generated ${path.join(directory, 'servicemon.rb')}\nSHA-256: ${manifest.sha256}\nRelease URL: ${publicUrl}\nPreserve each formula with its matching source archive for recovery.`,
+);

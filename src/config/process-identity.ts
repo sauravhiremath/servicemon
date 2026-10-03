@@ -16,7 +16,9 @@ export function processIdentity(pid: number): Promise<ProcessIdentity> {
     }
     const status = 'status' in error && typeof error.status === 'number' ? error.status : undefined;
     const code = 'code' in error ? error.code : undefined;
-    resolve(status === 1 || code === 1 || code === '1' ? { state: 'dead' } : { state: 'uncertain' });
+    resolve(
+      status === 1 || code === 1 || code === '1' ? { state: 'dead' } : { state: 'uncertain' },
+    );
   });
   return promise;
 }
@@ -24,13 +26,19 @@ export function processIdentity(pid: number): Promise<ProcessIdentity> {
 let ownStart: Promise<string> | undefined;
 
 export function ownStartedAt(): Promise<string> {
-  if (ownStart) return ownStart;
-  ownStart = processIdentity(process.pid).then(identity => {
-    if (identity.state !== 'alive') throw new AppError('OWNERSHIP_CONFLICT', 'Cannot read this process start time.');
-    return identity.startedAt;
-  }).catch(error => {
-    ownStart = undefined;
-    throw error;
-  });
+  if (ownStart) {
+    return ownStart;
+  }
+  ownStart = processIdentity(process.pid)
+    .then((identity) => {
+      if (identity.state !== 'alive') {
+        throw new AppError('OWNERSHIP_CONFLICT', 'Cannot read this process start time.');
+      }
+      return identity.startedAt;
+    })
+    .catch((error) => {
+      ownStart = undefined;
+      throw error;
+    });
   return ownStart;
 }

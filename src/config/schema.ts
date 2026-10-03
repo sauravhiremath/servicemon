@@ -77,17 +77,21 @@ const projectSchema = z.strictObject({
   tasks: z.record(z.string(), taskSchema).optional(),
   compose_groups: z.record(z.string(), groupSchema).optional(),
 });
-export const configSchema = z.strictObject({
+const configSchema = z.strictObject({
   version: z.literal(1),
   server: z.strictObject({ port: z.number().int().min(0).max(65535) }).optional(),
-  logs: z.strictObject({
-    per_entry_bytes: z.number().int().positive().optional(),
-    total_bytes: z.number().int().positive().optional(),
-  }).optional(),
-  timeouts: z.strictObject({
-    stop_seconds: seconds.optional(),
-    readiness_seconds: seconds.optional(),
-  }).optional(),
+  logs: z
+    .strictObject({
+      per_entry_bytes: z.number().int().positive().optional(),
+      total_bytes: z.number().int().positive().optional(),
+    })
+    .optional(),
+  timeouts: z
+    .strictObject({
+      stop_seconds: seconds.optional(),
+      readiness_seconds: seconds.optional(),
+    })
+    .optional(),
   projects: z.record(z.string(), projectSchema).optional(),
 });
 export type ParsedConfig = z.infer<typeof configSchema>;
@@ -98,9 +102,13 @@ export type ParsedOverride = z.infer<typeof composeOverrideSchema>;
 export type ParsedCheck = z.infer<typeof healthcheck>;
 
 function linePos(value: unknown): { line?: number; col?: number } {
-  if (!value || typeof value !== 'object') return {};
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
   const point = Array.isArray(value) ? value[0] : 'start' in value ? value.start : value;
-  if (!point || typeof point !== 'object') return {};
+  if (!point || typeof point !== 'object') {
+    return {};
+  }
   const line = 'line' in point && typeof point.line === 'number' ? point.line : undefined;
   const col = 'col' in point && typeof point.col === 'number' ? point.col : undefined;
   return { line, col };
@@ -122,8 +130,12 @@ export function parseConfig(source: string): ParsedConfig {
     return configSchema.parse(raw);
   } catch (error) {
     if (error instanceof ZodError) {
-      const message = error.issues.map(issue => `${issue.path.join('.') || '(root)'}: ${issue.message}`).join('; ');
-      throw new AppError('INVALID_CONFIG', message, { issues: error.issues.map(issue => ({ path: issue.path, message: issue.message })) });
+      const message = error.issues
+        .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+        .join('; ');
+      throw new AppError('INVALID_CONFIG', message, {
+        issues: error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
+      });
     }
     throw error;
   }

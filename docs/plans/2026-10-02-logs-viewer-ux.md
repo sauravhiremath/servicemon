@@ -113,11 +113,11 @@ Project / service                    Running · Live · Following
 Service state describes the entry. Connection state describes the shared event stream.
 Follow describes the local reading behavior. None of these states implies another state.
 
-| Condition | Connection label | Follow label |
-| --- | --- | --- |
-| Event stream opens | Live | Following or Paused |
-| Event stream has not opened | Connecting | Following or Paused |
-| Event stream reports an error | Reconnecting | Following or Paused |
+| Condition                     | Connection label | Follow label        |
+| ----------------------------- | ---------------- | ------------------- |
+| Event stream opens            | Live             | Following or Paused |
+| Event stream has not opened   | Connecting       | Following or Paused |
+| Event stream reports an error | Reconnecting     | Following or Paused |
 
 Use the existing manager failure message for a confirmed manager failure.
 Do not add a Disconnected claim without a terminal connection signal.
@@ -300,6 +300,7 @@ Announce connection changes and user-triggered search/copy results through a sep
 **Test seam:** The Service logs region, splitter, tabs, Open logs menu, and event-stream events.
 
 **Steps:**
+
 1. Check exported symbol references with LSP.
 2. Separate event-stream state from successful snapshot requests.
 3. Move maximize and hide controls into the header.
@@ -325,6 +326,7 @@ Announce connection changes and user-triggered search/copy results through a sep
 **Test seam:** The first visible display line, the Follow latest control, and the Go to latest button.
 
 **Steps:**
+
 1. Add tab-local view fields and initialize them in `openLogs`.
 2. Save stable display-line anchors with pixel offsets.
 3. Restore anchors after records, layout, and active-tab changes.
@@ -350,6 +352,7 @@ Announce connection changes and user-triggered search/copy results through a sep
 **Test seam:** Search input, mode controls, match counter, navigation buttons, and displayed context.
 
 **Steps:**
+
 1. Add literal matching helpers and occurrence identities.
 2. Replace immediate filtering with default Find mode.
 3. Add Filter mode and complete-record filtering.
@@ -375,6 +378,7 @@ Announce connection changes and user-triggered search/copy results through a sep
 **Test seam:** Rendered output, wrapped continuation lines, selected text, and response-token helper results.
 
 **Steps:**
+
 1. Set the font size, line height, timestamp field, and container field styles.
 2. Indent wrapped continuation lines under the message field.
 3. Preserve timestamp tooltips and horizontal scrolling.
@@ -400,6 +404,7 @@ Announce connection changes and user-triggered search/copy results through a sep
 **Test seam:** History banner, empty states, clipboard contents, and copy feedback.
 
 **Steps:**
+
 1. Move the retention notice outside the scrolling output.
 2. Distinguish known client trimming from other history gaps without invented server limits.
 3. Rename copy to Copy displayed logs and define its tooltip.
@@ -424,6 +429,7 @@ Announce connection changes and user-triggered search/copy results through a sep
 **Test seam:** Keyboard-only workflows, viewport changes, zoom, status announcements, and installed CLI output.
 
 **Steps:**
+
 1. Exercise the complete path from opening logs through Find, Filter, pause, copy, maximize, and restore.
 2. Exercise service switching while maximized.
 3. Check focus order and return after menus and panel hiding.
@@ -469,15 +475,15 @@ Complete this browser scenario:
 
 Acceptance coverage:
 
-| Criteria | Tasks |
-| --- | --- |
-| 1–5 | 1, 2, 6 |
-| 6 | 1, 6 |
-| 7–9 | 2, 6 |
-| 10–12 | 3, 6 |
-| 13–16 | 4, 6 |
-| 17–19 | 2, 5, 6 |
-| 20 | 1, 3, 6 |
+| Criteria | Tasks   |
+| -------- | ------- |
+| 1–5      | 1, 2, 6 |
+| 6        | 1, 6    |
+| 7–9      | 2, 6    |
+| 10–12    | 3, 6    |
+| 13–16    | 4, 6    |
+| 17–19    | 2, 5, 6 |
+| 20       | 1, 3, 6 |
 
 ## Implementation result
 

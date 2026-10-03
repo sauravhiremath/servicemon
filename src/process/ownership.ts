@@ -25,8 +25,16 @@ export function identityPath(stateDir: string, entryId: string): string {
 
 export function readIdentity(stateDir: string, entryId: string): RunIdentity | null {
   try {
-    const parsed = JSON.parse(readFileSync(identityPath(stateDir, entryId), 'utf8')) as Partial<RunIdentity>;
-    if (typeof parsed.pid !== 'number' || typeof parsed.pgid !== 'number' || typeof parsed.runId !== 'string') return null;
+    const parsed = JSON.parse(
+      readFileSync(identityPath(stateDir, entryId), 'utf8'),
+    ) as Partial<RunIdentity>;
+    if (
+      typeof parsed.pid !== 'number' ||
+      typeof parsed.pgid !== 'number' ||
+      typeof parsed.runId !== 'string'
+    ) {
+      return null;
+    }
     return {
       entryId: parsed.entryId ?? entryId,
       runId: parsed.runId,
@@ -54,16 +62,25 @@ export function writeIdentity(stateDir: string, identity: RunIdentity): void {
 export function cleanEnv(environment: NodeJS.ProcessEnv, runId?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(environment)) {
-    if (typeof value === 'string') env[key] = value;
+    if (typeof value === 'string') {
+      env[key] = value;
+    }
   }
-  if (runId) env.SERVICEMON_RUN_ID = runId;
+  if (runId) {
+    env.SERVICEMON_RUN_ID = runId;
+  }
   return env;
 }
 
 export async function captureStart(pid: number): Promise<string | null> {
-  if (!Number.isInteger(pid) || pid <= 1) return null;
+  if (!Number.isInteger(pid) || pid <= 1) {
+    return null;
+  }
   try {
-    const { stdout } = await execFileAsync('/bin/ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8', env: psEnv() });
+    const { stdout } = await execFileAsync('/bin/ps', ['-p', String(pid), '-o', 'lstart='], {
+      encoding: 'utf8',
+      env: psEnv(),
+    });
     const value = stdout.trim();
     return value || null;
   } catch {
@@ -77,55 +94,88 @@ interface GroupMember {
   startedAt: string;
 }
 
-export async function listGroup(pgid: number): Promise<GroupMember[] | null> {
-  if (!Number.isInteger(pgid) || pgid <= 1) return null;
+async function listGroup(pgid: number): Promise<GroupMember[] | null> {
+  if (!Number.isInteger(pgid) || pgid <= 1) {
+    return null;
+  }
   try {
-    const { stdout } = await execFileAsync('/bin/ps', ['-g', String(pgid), '-o', 'pid=,pgid=,lstart='], { encoding: 'utf8', env: psEnv() });
+    const { stdout } = await execFileAsync(
+      '/bin/ps',
+      ['-g', String(pgid), '-o', 'pid=,pgid=,lstart='],
+      { encoding: 'utf8', env: psEnv() },
+    );
     return parseGroup(stdout);
   } catch (error) {
     const stdout = textOf(error, 'stdout');
     const stderr = textOf(error, 'stderr');
-    if (!stdout.trim() && !stderr.trim()) return [];
+    if (!stdout.trim() && !stderr.trim()) {
+      return [];
+    }
     return null;
   }
 }
 
 export async function inspectIdentity(identity: RunIdentity): Promise<IdentityState> {
-  if (!identity.live) return 'dead';
+  if (!identity.live) {
+    return 'dead';
+  }
   const members = await listGroup(identity.pgid);
-  if (members === null) return 'uncertain';
-  if (members.length === 0) return 'dead';
+  if (members === null) {
+    return 'uncertain';
+  }
+  if (members.length === 0) {
+    return 'dead';
+  }
   const leader = members.find((member) => member.pid === identity.pid);
   if (leader) {
-    if (!identity.startedAt) return 'uncertain';
+    if (!identity.startedAt) {
+      return 'uncertain';
+    }
     return leader.startedAt === identity.startedAt ? 'alive' : 'dead';
   }
   const reused = members.find((member) => member.pid === identity.pgid);
-  if (reused && identity.startedAt && reused.startedAt !== identity.startedAt) return 'dead';
+  if (reused && identity.startedAt && reused.startedAt !== identity.startedAt) {
+    return 'dead';
+  }
   return 'alive';
 }
 
 export function signalAttached(pid: number, signal: NodeJS.Signals): 'signaled' | 'gone' {
-  if (!Number.isInteger(pid) || pid <= 1) return 'gone';
+  if (!Number.isInteger(pid) || pid <= 1) {
+    return 'gone';
+  }
   try {
     process.kill(-pid, signal);
     return 'signaled';
   } catch (error) {
-    if (codeOf(error) === 'ESRCH') return 'gone';
+    if (codeOf(error) === 'ESRCH') {
+      return 'gone';
+    }
     throw error;
   }
 }
 
-export async function signalOwnedGroup(identity: RunIdentity, signal: NodeJS.Signals): Promise<'signaled' | 'gone' | 'uncertain'> {
+export async function signalOwnedGroup(
+  identity: RunIdentity,
+  signal: NodeJS.Signals,
+): Promise<'signaled' | 'gone' | 'uncertain'> {
   const state = await inspectIdentity({ ...identity, live: true });
-  if (state === 'dead') return 'gone';
-  if (state === 'uncertain') return 'uncertain';
+  if (state === 'dead') {
+    return 'gone';
+  }
+  if (state === 'uncertain') {
+    return 'uncertain';
+  }
   try {
     process.kill(-identity.pgid, signal);
     return 'signaled';
   } catch (error) {
-    if (codeOf(error) === 'ESRCH') return 'gone';
-    if (codeOf(error) === 'EPERM') return 'uncertain';
+    if (codeOf(error) === 'ESRCH') {
+      return 'gone';
+    }
+    if (codeOf(error) === 'EPERM') {
+      return 'uncertain';
+    }
     throw error;
   }
 }
@@ -134,15 +184,21 @@ export async function waitUntilGone(identity: RunIdentity, timeoutMs: number): P
   const deadline = Date.now() + Math.max(0, timeoutMs);
   do {
     const state = await inspectIdentity({ ...identity, live: true });
-    if (state === 'dead') return true;
-    if (state === 'uncertain') return false;
-    if (Date.now() >= deadline) return false;
+    if (state === 'dead') {
+      return true;
+    }
+    if (state === 'uncertain') {
+      return false;
+    }
+    if (Date.now() >= deadline) {
+      return false;
+    }
     await delay(40);
   } while (Date.now() < deadline);
   return (await inspectIdentity({ ...identity, live: true })) === 'dead';
 }
 
-export function delay(ms: number): Promise<void> {
+function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -154,19 +210,27 @@ function parseGroup(stdout: string): GroupMember[] {
   const members: GroupMember[] = [];
   for (const line of stdout.split('\n')) {
     const match = line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/);
-    if (!match) continue;
+    if (!match) {
+      continue;
+    }
     members.push({ pid: Number(match[1]), pgid: Number(match[2]), startedAt: match[3].trim() });
   }
   return members;
 }
 
 function codeOf(error: unknown): string | undefined {
-  return error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : undefined;
+  return error && typeof error === 'object' && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : undefined;
 }
 
 function textOf(error: unknown, key: 'stdout' | 'stderr'): string {
-  if (!error || typeof error !== 'object' || !(key in error)) return '';
+  if (!error || typeof error !== 'object' || !(key in error)) {
+    return '';
+  }
   const value = (error as Record<string, unknown>)[key];
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') {
+    return value;
+  }
   return value instanceof Buffer ? value.toString('utf8') : '';
 }

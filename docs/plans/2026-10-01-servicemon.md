@@ -22,34 +22,34 @@ An **operation** records a requested action and its result.
 
 ## Acceptance criteria
 
-| ID | Required result | Tasks |
-| --- | --- | --- |
-| A01 | One manager controls all registered projects. Foreground and background serve modes work. | 1, 2, 9 |
-| A02 | A central YAML config defines projects, commands, tasks, Compose groups, notes, links, and working folders. | 2, 3 |
-| A03 | CLI commands list, add, and remove projects, services, tasks, and Compose groups. Unrelated YAML settings and comments remain. | 3, 10 |
-| A04 | Start, Stop, and Restart control owned process groups. Commands run in their configured folders. | 4, 5 |
-| A05 | Tasks have Run and Stop controls. Successful task results are reused only during the current manager session. | 4, 5 |
-| A06 | Start resolves explicit dependencies, waits for readiness, and blocks dependents when a prerequisite fails. | 5, 6 |
-| A07 | Dependency references can cross projects. Validation rejects missing references and cycles in both graphs. | 3, 5 |
-| A08 | Restart follows configured rules recursively. It leaves stopped included services stopped, except required startup dependencies. | 5, 6 |
-| A09 | Ordinary Stop affects only the selected service. Failures and failed health checks cause no automatic recovery. | 4, 5, 6 |
-| A10 | HTTP, TCP, and command health checks work. Start and Restart wait by default and support `--no-wait`. | 5, 6, 8 |
-| A11 | One Compose file creates individual service rows and whole-group controls. Existing configured containers are visible. | 7, 8, 11 |
-| A12 | Process and task logs persist across runs and manager restarts. Retention is generous, bounded, and configurable. | 4, 7, 8, 12 |
-| A13 | CLI output supports human text, `--json`, stable IDs, error codes, exit codes, and live logs. | 8 |
-| A14 | Manual config edits require explicit reload. Invalid config keeps the last valid config active. | 10 |
-| A15 | Reload stops removed or execution-changed entries before applying their changes. Other services remain running. | 10 |
-| A16 | Login-shell exported variables load at startup and reload. Existing processes keep their environment. Commands load their own env files. | 2, 4, 6, 10 |
-| A17 | Autostart runs only at manager startup. Reload never starts newly added entries automatically. | 5, 9, 10 |
-| A18 | Manager shutdown stops its processes and active tasks but leaves Compose containers running. Browser closure stops nothing. | 7, 9 |
-| A19 | Optional login startup has explicit enable and disable commands. Installation does not enable it automatically. | 9 |
-| A20 | The dashboard uses the approved toolbar and table layout, column resizing, column filters, and 20 entries per page. | 11 |
-| A21 | Logs open in a dark, resizable bottom panel with one tab per service or task. | 12 |
-| A22 | Controls, menus, and filters reuse official shadcn examples. No custom control design replaces those examples. | 11, 12 |
-| A23 | The dashboard copies the config path. It has Reload config but no definition-editing forms. | 10, 11 |
-| A24 | Serve accepts a user-selected `.html` or `.htm` file instead of the built-in dashboard. No customization framework is provided. | 2, 11 |
-| A25 | Servicemon does not attach to or stop ordinary processes started outside it. | 4, 9 |
-| A26 | The installed CLI serves built dashboard assets without a separate frontend development server. | 1, 13 |
+| ID  | Required result                                                                                                                            | Tasks               |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| A01 | One manager controls all registered projects. Foreground and background serve modes work.                                                  | 1, 2, 9             |
+| A02 | A central YAML config defines projects, commands, tasks, Compose groups, notes, links, and working folders.                                | 2, 3                |
+| A03 | CLI commands list, add, and remove projects, services, tasks, and Compose groups. Unrelated YAML settings and comments remain.             | 3, 10               |
+| A04 | Start, Stop, and Restart control owned process groups. Commands run in their configured folders.                                           | 4, 5                |
+| A05 | Tasks have Run and Stop controls. Successful task results are reused only during the current manager session.                              | 4, 5                |
+| A06 | Start resolves explicit dependencies, waits for readiness, and blocks dependents when a prerequisite fails.                                | 5, 6                |
+| A07 | Dependency references can cross projects. Validation rejects missing references and cycles in both graphs.                                 | 3, 5                |
+| A08 | Restart follows configured rules recursively. It leaves stopped included services stopped, except required startup dependencies.           | 5, 6                |
+| A09 | Ordinary Stop affects only the selected service. Failures and failed health checks cause no automatic recovery.                            | 4, 5, 6             |
+| A10 | HTTP, TCP, and command health checks work. Start and Restart wait by default and support `--no-wait`.                                      | 5, 6, 8             |
+| A11 | One Compose file creates individual service rows and whole-group controls. Existing configured containers are visible.                     | 7, 8, 11            |
+| A12 | Process and task logs persist across runs and manager restarts. Retention is generous, bounded, and configurable.                          | 4, 7, 8, 12         |
+| A13 | CLI output supports human text, `--json`, stable IDs, error codes, exit codes, and live logs.                                              | 8                   |
+| A14 | Manual config edits require explicit reload. Invalid config keeps the last valid config active.                                            | 10                  |
+| A15 | Reload stops removed or execution-changed entries before applying their changes. Other services remain running.                            | 10                  |
+| A16 | Login-shell exported variables load at startup and reload. Existing processes keep their environment. Commands load their own env files.   | 2, 4, 6, 10         |
+| A17 | Autostart runs only at manager startup. Reload never starts newly added entries automatically.                                             | 5, 9, 10            |
+| A18 | Manager shutdown stops its processes and active tasks but leaves Compose containers running. Browser closure stops nothing.                | 7, 9                |
+| A19 | Optional login startup has explicit enable and disable commands. Installation does not enable it automatically.                            | 9                   |
+| A20 | The dashboard uses the approved toolbar and table layout, column resizing, column filters, and 20 entries per page.                        | 11                  |
+| A21 | Logs open in a dark, resizable bottom panel with one tab per service or task.                                                              | 12                  |
+| A22 | Controls, menus, and filters reuse official shadcn examples. No custom control design replaces those examples.                             | 11, 12              |
+| A23 | The dashboard copies the config path. It has Reload config but no definition-editing forms.                                                | 10, 11              |
+| A24 | Serve accepts a user-selected `.html` or `.htm` file instead of the built-in dashboard. No customization framework is provided.            | 2, 11               |
+| A25 | Servicemon does not attach to or stop ordinary processes started outside it.                                                               | 4, 9                |
+| A26 | The installed CLI serves built dashboard assets without a separate frontend development server.                                            | 1, 13               |
 | A27 | Use maintained open-source libraries for standard CLI and application functions where suitable. Do not duplicate their existing functions. | 1, 3, 8, 11, 12, 13 |
 
 ## Existing behavior
@@ -119,35 +119,34 @@ Evaluate libraries against the required behavior, maintenance status, license, m
 Check current documentation before selecting a library. Record selected versions in the lockfile.
 If no suitable library meets a contract, record the gap before implementing that function directly.
 
-
 Other approaches considered:
 
-| Approach | User result | Trade-off and risk | Deliberate exclusion |
-| --- | --- | --- | --- |
-| TypeScript manager plus React dashboard, selected | All approved controls share one implementation language. | Requires a Node runtime. Process-group ownership needs careful tests. | No single native executable or desktop app. |
-| Rust manager plus React dashboard | The same service controls can ship with a native manager. | Adds a second language and separate serialization contracts. Packaging work increases. | No reduction in dashboard or Compose work. |
-| Shell-command wrapper with a dashboard | Basic command launching can be small. | Cannot meet the approved Compose state, recursive restart, task cache, and agent contracts without becoming a manager. | Excludes required behavior, so reject it. |
+| Approach                                          | User result                                               | Trade-off and risk                                                                                                     | Deliberate exclusion                        |
+| ------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| TypeScript manager plus React dashboard, selected | All approved controls share one implementation language.  | Requires a Node runtime. Process-group ownership needs careful tests.                                                  | No single native executable or desktop app. |
+| Rust manager plus React dashboard                 | The same service controls can ship with a native manager. | Adds a second language and separate serialization contracts. Packaging work increases.                                 | No reduction in dashboard or Compose work.  |
+| Shell-command wrapper with a dashboard            | Basic command launching can be small.                     | Cannot meet the approved Compose state, recursive restart, task cache, and agent contracts without becoming a manager. | Excludes required behavior, so reject it.   |
 
 ### Planning defaults
 
 These defaults complete the specification. They are not additional product features.
 
-| Setting | Default |
-| --- | --- |
-| Config | `~/.config/servicemon/config.yaml` |
-| State and logs | `~/Library/Application Support/servicemon/` |
-| Bind address | `127.0.0.1` only |
-| HTTP port | `7331`; configurable |
-| Command shell | `/bin/sh -c` |
-| Stop timeout | 10 seconds |
-| Startup readiness timeout | 60 seconds |
-| Check interval | 2 seconds |
-| Individual check timeout | 3 seconds |
-| Process/task retained log bytes | 256 MiB per entry |
-| Total retained process/task log bytes | 4 GiB |
-| Default page size | 20 entries |
-| Restart settings | Both false |
-| Autostart | False |
+| Setting                               | Default                                     |
+| ------------------------------------- | ------------------------------------------- |
+| Config                                | `~/.config/servicemon/config.yaml`          |
+| State and logs                        | `~/Library/Application Support/servicemon/` |
+| Bind address                          | `127.0.0.1` only                            |
+| HTTP port                             | `7331`; configurable                        |
+| Command shell                         | `/bin/sh -c`                                |
+| Stop timeout                          | 10 seconds                                  |
+| Startup readiness timeout             | 60 seconds                                  |
+| Check interval                        | 2 seconds                                   |
+| Individual check timeout              | 3 seconds                                   |
+| Process/task retained log bytes       | 256 MiB per entry                           |
+| Total retained process/task log bytes | 4 GiB                                       |
+| Default page size                     | 20 entries                                  |
+| Restart settings                      | Both false                                  |
+| Autostart                             | False                                       |
 
 Allow global timeout and retention settings. Allow per-entry stop and readiness timeouts.
 Do not give command checks their own environment-file loader.
@@ -613,25 +612,25 @@ Do not implement definition-editing forms.
 
 ## Error behavior
 
-| Condition | Required behavior |
-| --- | --- |
-| Invalid YAML, schema, reference, or graph | Show source location where available, stable error code, and exact cycle path where applicable. Apply nothing. |
-| Missing working folder or executable | Fail the requested run with entry ID and reason. Preserve available logs. |
-| Command exits unexpectedly | Record exit code or signal. Leave it exited. Do not restart it. |
-| Dependency fails | Block dependent startup. Leave already-started prerequisites running. |
-| Readiness deadline expires | Return timeout and operation ID. Leave running processes untouched. |
-| Health fails after startup | Update health only. Do not stop, restart, or affect neighbors. |
-| Stop deadline expires | Force-stop only the owned group, then report the observed result. |
-| Docker absent or unavailable | Fail Compose actions with tool details. Do not fabricate container state. |
-| Manager unavailable | Runtime CLI returns unavailable. Definition commands can still edit config offline. |
-| Concurrent conflicting action | Return conflict with the active operation ID. Start no duplicate run. |
-| Invalid config on disk during reload | Keep the previous config active and expose reload failure. |
-| Partial stop failure during reload | Keep the previous active config. Report all observed stopped and failed entries. |
-| Stale CLI config write | Refuse replacement. Preserve external edits. |
-| Log retention removes a cursor | Report a gap and supply the oldest available history. |
-| Logging disk error | Report persistence failure and continue bounded live capture. |
-| Abnormal manager exit leaves a command alive | Report ownership conflict. Block duplicate startup and do not attach or signal an uncertain PID. |
-| Custom UI path invalid | Fail serve with the file error. Do not add compatibility analysis. |
+| Condition                                    | Required behavior                                                                                              |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Invalid YAML, schema, reference, or graph    | Show source location where available, stable error code, and exact cycle path where applicable. Apply nothing. |
+| Missing working folder or executable         | Fail the requested run with entry ID and reason. Preserve available logs.                                      |
+| Command exits unexpectedly                   | Record exit code or signal. Leave it exited. Do not restart it.                                                |
+| Dependency fails                             | Block dependent startup. Leave already-started prerequisites running.                                          |
+| Readiness deadline expires                   | Return timeout and operation ID. Leave running processes untouched.                                            |
+| Health fails after startup                   | Update health only. Do not stop, restart, or affect neighbors.                                                 |
+| Stop deadline expires                        | Force-stop only the owned group, then report the observed result.                                              |
+| Docker absent or unavailable                 | Fail Compose actions with tool details. Do not fabricate container state.                                      |
+| Manager unavailable                          | Runtime CLI returns unavailable. Definition commands can still edit config offline.                            |
+| Concurrent conflicting action                | Return conflict with the active operation ID. Start no duplicate run.                                          |
+| Invalid config on disk during reload         | Keep the previous config active and expose reload failure.                                                     |
+| Partial stop failure during reload           | Keep the previous active config. Report all observed stopped and failed entries.                               |
+| Stale CLI config write                       | Refuse replacement. Preserve external edits.                                                                   |
+| Log retention removes a cursor               | Report a gap and supply the oldest available history.                                                          |
+| Logging disk error                           | Report persistence failure and continue bounded live capture.                                                  |
+| Abnormal manager exit leaves a command alive | Report ownership conflict. Block duplicate startup and do not attach or signal an uncertain PID.               |
+| Custom UI path invalid                       | Fail serve with the file error. Do not add compatibility analysis.                                             |
 
 ## Test strategy
 
@@ -683,6 +682,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Packed npm installation and HTTP response from the actual CLI.
 
 **Steps:**
+
 1. Select suitable maintained libraries, including an established CLI library, and create the TypeScript, Node, React, Vite, and npm setup.
 2. Add scripts: `build`, `typecheck`, `test`, `test:e2e`, `test:compose`, `smoke`, and `smoke:compose`.
 3. Define `test` as `vitest run`, and support paths after `npm test --`.
@@ -707,6 +707,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Two real serve invocations using isolated state, plus controlled login-shell fixtures.
 
 **Steps:**
+
 1. Implement config/state defaults and test-only explicit state-directory selection.
 2. Parse global settings and project definitions without executing service commands.
 3. Capture exported login-shell variables through a separate data channel.
@@ -731,6 +732,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Real CLI edits of temporary commented YAML files.
 
 **Steps:**
+
 1. Complete strict schemas for services, tasks, groups, checks, and global settings.
 2. Implement path and qualified-reference resolution.
 3. Reject duplicate keys, duplicate entry IDs, and invalid names.
@@ -755,6 +757,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Real commands with children, controlled signals, temp working folders, and retained output.
 
 **Steps:**
+
 1. Spawn command strings with captured environment, working folder, and isolated process group.
 2. Record service/task state and run identity without guessing application readiness.
 3. Drain stdout/stderr into bounded chunks and rotated persistent segments.
@@ -780,6 +783,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Operation results and observed launch/stop order for real fixture services and tasks.
 
 **Steps:**
+
 1. Compile both graphs and report exact cycle paths across projects.
 2. Plan starts, project actions, and recursive restart selections before execution.
 3. Apply reverse stop order and forward start order.
@@ -805,6 +809,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Real loopback endpoints, delayed responses, and timeout-producing command checks.
 
 **Steps:**
+
 1. Implement HTTP expected-status checks, TCP connections, and command checks.
 2. Bound each check and prevent overlapping checks.
 3. Use current prerequisite readiness rather than an old success.
@@ -829,6 +834,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Actual Docker Compose v2 fixture with two services, health checks, and an isolated volume.
 
 **Steps:**
+
 1. Discover services and Compose dependencies from normalized Compose config output.
 2. Merge overrides and validate generated IDs and references.
 3. Implement individual and whole-group actions through the operation planner.
@@ -854,6 +860,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Installed CLI subprocesses and real HTTP/event-stream clients.
 
 **Steps:**
+
 1. Add status, actions, operations, and history/live log endpoints.
 2. Allow plain local access and send a matching Origin header from CLI mutations.
 3. Reject cross-origin control requests and invalid Host headers.
@@ -879,6 +886,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Actual background CLI plus a temporary LaunchAgent identity in the user's test session.
 
 **Steps:**
+
 1. Detach background serve and wait for actual manager startup.
 2. Route manager diagnostics to its private log files.
 3. Implement manager status and Stop, including all owned active tasks.
@@ -904,6 +912,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Edit real temporary YAML while fixture services run and inspect active config plus process state.
 
 **Steps:**
+
 1. Validate YAML, Compose discovery, both graphs, and candidate environment before side effects.
 2. Classify metadata, dependency/check, and execution changes.
 3. Stop removed or execution-changed entries, then commit the candidate.
@@ -929,6 +938,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Actual built dashboard in Playwright, backed by the real manager and fixture services.
 
 **Steps:**
+
 1. Start from official shadcn Tasks, Data Table, faceted filter, and Dropdown Menu examples.
 2. Implement the toolbar and approved columns with TanStack Table sizing.
 3. Add global search, project selection, column filters, and 20-entry pagination.
@@ -954,6 +964,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Built dashboard with streaming fixture output, plus persistent log-store boundary tests.
 
 **Steps:**
+
 1. Compose standard Tabs and Resizable components into the approved bottom panel.
 2. Open or select one existing tab per entry.
 3. Join retained history to live records and show run boundaries and gaps.
@@ -979,6 +990,7 @@ Do not implement multiple partially working components before a runnable slice e
 **Test seam:** Packed installation, real background manager, built browser UI, and isolated real Compose project.
 
 **Steps:**
+
 1. Complete smoke scenarios for dependencies, tasks, restart rules, reload, logs, and shutdown.
 2. Run the acceptance matrix against the installed package, not only source-mode commands.
 3. Register and remove an isolated test LaunchAgent without changing the user's real login setting.

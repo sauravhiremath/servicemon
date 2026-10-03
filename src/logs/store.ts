@@ -1,4 +1,12 @@
-import { appendFileSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import type { LogHistory, LogRecord } from '../shared/types.js';
 import { truncateUtf8 } from './decoder.js';
@@ -53,10 +61,21 @@ export class LogStore {
     }
   }
 
-  append(entryId: string, runId: string, stream: LogRecord['stream'], text: string, containerId?: string): LogRecord {
-    if (this.closed) throw new Error('Log store is closed.');
+  append(
+    entryId: string,
+    runId: string,
+    stream: LogRecord['stream'],
+    text: string,
+    containerId?: string,
+  ): LogRecord {
+    if (this.closed) {
+      throw new Error('Log store is closed.');
+    }
     const meta = this.meta(entryId);
-    const capped = truncateUtf8(text, Math.max(1, Math.min(this.limits.perEntryBytes, this.limits.totalBytes)));
+    const capped = truncateUtf8(
+      text,
+      Math.max(1, Math.min(this.limits.perEntryBytes, this.limits.totalBytes)),
+    );
     const record: LogRecord = {
       entryId,
       runId,
@@ -86,8 +105,15 @@ export class LogStore {
     }
     // Array.slice treats -0 as 0, so tail 0 must not use it. An empty tail still ends at the latest selected record.
     const selectedEnd = records.at(-1)?.sequence;
-    if (query.tail !== undefined) records = query.tail === 0 ? [] : records.slice(-query.tail);
-    const cursor = records.at(-1)?.sequence ?? (query.tail === 0 ? selectedEnd : undefined) ?? query.after ?? retained.at(-1)?.sequence ?? 0;
+    if (query.tail !== undefined) {
+      records = query.tail === 0 ? [] : records.slice(-query.tail);
+    }
+    const cursor =
+      records.at(-1)?.sequence ??
+      (query.tail === 0 ? selectedEnd : undefined) ??
+      query.after ??
+      retained.at(-1)?.sequence ??
+      0;
     return {
       records,
       cursor,
@@ -98,7 +124,14 @@ export class LogStore {
   }
 
   subscribe(entryId: string, listener: (record: LogRecord) => void): () => void {
-    const subscriber: Subscriber = { entryId, listener, queue: [], scheduled: false, gapped: false, closed: false };
+    const subscriber: Subscriber = {
+      entryId,
+      listener,
+      queue: [],
+      scheduled: false,
+      gapped: false,
+      closed: false,
+    };
     const set = this.subscribers.get(entryId) ?? new Set<Subscriber>();
     set.add(subscriber);
     this.subscribers.set(entryId, set);
@@ -110,19 +143,25 @@ export class LogStore {
 
   setLimits(limits: LogLimits): void {
     this.limits = normalizeLimits(limits);
-    for (const entryId of this.knownIds()) this.evict(entryId);
+    for (const entryId of this.knownIds()) {
+      this.evict(entryId);
+    }
   }
 
   close(): void {
     this.closed = true;
     for (const set of this.subscribers.values()) {
-      for (const subscriber of set) subscriber.closed = true;
+      for (const subscriber of set) {
+        subscriber.closed = true;
+      }
     }
     this.subscribers.clear();
   }
 
   private persist(entryId: string, meta: EntryMeta, record: LogRecord): void {
-    if (this.persistenceError && !this.directoryReady()) return;
+    if (this.persistenceError && !this.directoryReady()) {
+      return;
+    }
     try {
       const dir = this.entryDir(entryId);
       mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -131,7 +170,13 @@ export class LogStore {
       const cap = Math.max(1, Math.min(this.limits.perEntryBytes, SEGMENT_CAP));
       let segment = meta.segments.at(-1);
       if (!segment || segment.bytes + bytes > cap) {
-        segment = { name: `${String(record.sequence).padStart(6, '0')}.jsonl`, bytes: 0, first: record.sequence, last: record.sequence, startedAt: record.timestamp };
+        segment = {
+          name: `${String(record.sequence).padStart(6, '0')}.jsonl`,
+          bytes: 0,
+          first: record.sequence,
+          last: record.sequence,
+          startedAt: record.timestamp,
+        };
         meta.segments.push(segment);
       }
       appendFileSync(join(dir, segment.name), line, { mode: 0o600 });
@@ -146,10 +191,14 @@ export class LogStore {
 
   private evict(entryId: string): void {
     const meta = this.meta(entryId);
-    while (meta.segments.length > 0 && this.entryBytes(meta) > this.limits.perEntryBytes) this.deleteSegment(entryId, meta, 0);
+    while (meta.segments.length > 0 && this.entryBytes(meta) > this.limits.perEntryBytes) {
+      this.deleteSegment(entryId, meta, 0);
+    }
     while (this.totalBytes() > this.limits.totalBytes) {
       const oldest = this.oldestSegment();
-      if (!oldest) break;
+      if (!oldest) {
+        break;
+      }
       this.deleteSegment(oldest.entryId, this.meta(oldest.entryId), oldest.index);
     }
     this.writeMeta(entryId, meta);
@@ -157,7 +206,9 @@ export class LogStore {
 
   private deleteSegment(entryId: string, meta: EntryMeta, index: number): void {
     const segment = meta.segments[index];
-    if (!segment) return;
+    if (!segment) {
+      return;
+    }
     meta.segments.splice(index, 1);
     try {
       rmSync(join(this.entryDir(entryId), segment.name), { force: true });
@@ -174,7 +225,9 @@ export class LogStore {
         for (const segment of meta.segments) {
           const text = readFileSync(join(this.entryDir(entryId), segment.name), 'utf8');
           for (const line of text.split('\n')) {
-            if (!line) continue;
+            if (!line) {
+              continue;
+            }
             try {
               fromDisk.push(JSON.parse(line) as LogRecord);
             } catch {
@@ -187,25 +240,35 @@ export class LogStore {
       }
     }
     const seen = new Set(fromDisk.map((record) => record.sequence));
-    const extra = this.persistenceError ? (this.live.get(entryId) ?? []).filter((record) => !seen.has(record.sequence)) : [];
+    const extra = this.persistenceError
+      ? (this.live.get(entryId) ?? []).filter((record) => !seen.has(record.sequence))
+      : [];
     return [...fromDisk, ...extra].sort((left, right) => left.sequence - right.sequence);
   }
 
   private remember(record: LogRecord): void {
     const current = this.live.get(record.entryId) ?? [];
     current.push(record);
-    while (current.length > LIVE_RECORD_LIMIT) current.shift();
+    while (current.length > LIVE_RECORD_LIMIT) {
+      current.shift();
+    }
     this.live.set(record.entryId, current);
   }
 
   private notify(record: LogRecord): void {
     const set = this.subscribers.get(record.entryId);
-    if (!set) return;
-    for (const subscriber of set) this.enqueue(subscriber, record);
+    if (!set) {
+      return;
+    }
+    for (const subscriber of set) {
+      this.enqueue(subscriber, record);
+    }
   }
 
   private enqueue(subscriber: Subscriber, record: LogRecord): void {
-    if (subscriber.closed || subscriber.gapped) return;
+    if (subscriber.closed || subscriber.gapped) {
+      return;
+    }
     if (subscriber.queue.length >= QUEUE_LIMIT) {
       subscriber.queue.length = 0;
       subscriber.gapped = true;
@@ -216,17 +279,27 @@ export class LogStore {
   }
 
   private pump(subscriber: Subscriber): void {
-    if (subscriber.scheduled || subscriber.closed) return;
+    if (subscriber.scheduled || subscriber.closed) {
+      return;
+    }
     subscriber.scheduled = true;
     setImmediate(() => {
       subscriber.scheduled = false;
-      if (subscriber.closed) return;
+      if (subscriber.closed) {
+        return;
+      }
       const gapped = subscriber.gapped;
       subscriber.gapped = false;
       const batch = subscriber.queue.splice(0);
-      if (gapped) this.emit(subscriber, this.gapRecord(subscriber.entryId));
-      for (const record of batch) this.emit(subscriber, record);
-      if (!subscriber.closed && (subscriber.queue.length > 0 || subscriber.gapped)) this.pump(subscriber);
+      if (gapped) {
+        this.emit(subscriber, this.gapRecord(subscriber.entryId));
+      }
+      for (const record of batch) {
+        this.emit(subscriber, record);
+      }
+      if (!subscriber.closed && (subscriber.queue.length > 0 || subscriber.gapped)) {
+        this.pump(subscriber);
+      }
     });
   }
 
@@ -240,12 +313,21 @@ export class LogStore {
 
   private gapRecord(entryId: string): LogRecord {
     // Sequence 0 cannot collide with a later record. Callers reload history instead of storing this marker.
-    return { entryId, runId: '', sequence: 0, timestamp: new Date().toISOString(), stream: 'gap', text: '' };
+    return {
+      entryId,
+      runId: '',
+      sequence: 0,
+      timestamp: new Date().toISOString(),
+      stream: 'gap',
+      text: '',
+    };
   }
 
   private meta(entryId: string): EntryMeta {
     const cached = this.metas.get(entryId);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
     const loaded = this.readMeta(entryId);
     this.metas.set(entryId, loaded);
     return loaded;
@@ -253,8 +335,12 @@ export class LogStore {
 
   private readMeta(entryId: string): EntryMeta {
     try {
-      const parsed = JSON.parse(readFileSync(join(this.entryDir(entryId), 'meta.json'), 'utf8')) as EntryMeta;
-      if (!Array.isArray(parsed.segments) || typeof parsed.nextSequence !== 'number') return { nextSequence: 1, segments: [] };
+      const parsed = JSON.parse(
+        readFileSync(join(this.entryDir(entryId), 'meta.json'), 'utf8'),
+      ) as EntryMeta;
+      if (!Array.isArray(parsed.segments) || typeof parsed.nextSequence !== 'number') {
+        return { nextSequence: 1, segments: [] };
+      }
       return parsed;
     } catch {
       return { nextSequence: 1, segments: [] };
@@ -278,14 +364,18 @@ export class LogStore {
 
   private totalBytes(): number {
     let total = 0;
-    for (const entryId of this.knownIds()) total += this.entryBytes(this.meta(entryId));
+    for (const entryId of this.knownIds()) {
+      total += this.entryBytes(this.meta(entryId));
+    }
     return total;
   }
 
   private knownIds(): string[] {
     const ids = new Set(this.metas.keys());
     try {
-      for (const name of readdirSync(this.root)) ids.add(decodeURIComponent(name));
+      for (const name of readdirSync(this.root)) {
+        ids.add(decodeURIComponent(name));
+      }
     } catch {
       // Missing log root means there is no retained data.
     }
@@ -297,7 +387,9 @@ export class LogStore {
     for (const entryId of this.knownIds()) {
       const meta = this.meta(entryId);
       meta.segments.forEach((segment, index) => {
-        if (!oldest || segment.startedAt < oldest.startedAt) oldest = { entryId, index, startedAt: segment.startedAt };
+        if (!oldest || segment.startedAt < oldest.startedAt) {
+          oldest = { entryId, index, startedAt: segment.startedAt };
+        }
       });
     }
     return oldest;

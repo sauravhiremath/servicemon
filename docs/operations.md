@@ -29,20 +29,20 @@ Ordinary stderr output uses the normal log colour. Explicit error and warning la
 
 ## Failures
 
-| Condition | Result |
-| --- | --- |
-| Invalid initial config | Manager startup fails |
-| Invalid reload | Previous valid config stays active; dashboard shows the error |
-| Missing folder or executable | Requested run fails with entry details |
-| Command exits | Exit code or signal is recorded; no automatic restart |
-| Dependency fails | Dependent startup is blocked; started prerequisites remain running |
-| Readiness deadline expires | Operation fails; running process remains running |
-| Health fails after startup | Health changes only; neighbors are not stopped |
-| Stop deadline expires | Only the verified owned group is force-stopped |
-| Docker unavailable | Compose action fails with tool details; no invented state |
-| Manager unavailable | Runtime CLI action fails; it does not start a manager silently |
-| Log source unavailable | Error is shown; previous text is not replaced with invented output |
-| Custom UI missing or invalid | Serve fails with the file error |
+| Condition                    | Result                                                             |
+| ---------------------------- | ------------------------------------------------------------------ |
+| Invalid initial config       | Manager startup fails                                              |
+| Invalid reload               | Previous valid config stays active; dashboard shows the error      |
+| Missing folder or executable | Requested run fails with entry details                             |
+| Command exits                | Exit code or signal is recorded; no automatic restart              |
+| Dependency fails             | Dependent startup is blocked; started prerequisites remain running |
+| Readiness deadline expires   | Operation fails; running process remains running                   |
+| Health fails after startup   | Health changes only; neighbors are not stopped                     |
+| Stop deadline expires        | Only the verified owned group is force-stopped                     |
+| Docker unavailable           | Compose action fails with tool details; no invented state          |
+| Manager unavailable          | Runtime CLI action fails; it does not start a manager silently     |
+| Log source unavailable       | Error is shown; previous text is not replaced with invented output |
+| Custom UI missing or invalid | Serve fails with the file error                                    |
 
 Operations are serialized. Mutating requests can report busy instead of changing entries concurrently. Config edits detect file changes before commit. If a required stop fails, the candidate config is not applied; already completed stops are reported.
 

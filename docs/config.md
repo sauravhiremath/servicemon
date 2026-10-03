@@ -10,15 +10,15 @@ Run `servicemon config validate`. Validation includes Docker Compose discovery, 
 
 Root fields:
 
-| Field | Meaning | Default |
-| --- | --- | --- |
-| `version` | Required schema version | `1` |
-| `server.port` | Loopback port; `0` selects a free port | `7331` |
-| `logs.per_entry_bytes` | Retained process/task bytes per entry | `268435456` (256 MiB) |
-| `logs.total_bytes` | Total retained process/task bytes | `4294967296` (4 GiB) |
-| `timeouts.stop_seconds` | Graceful stop deadline | `10` |
-| `timeouts.readiness_seconds` | Startup readiness deadline | `60` |
-| `projects` | Project ID to definition mapping | Empty |
+| Field                        | Meaning                                | Default               |
+| ---------------------------- | -------------------------------------- | --------------------- |
+| `version`                    | Required schema version                | `1`                   |
+| `server.port`                | Loopback port; `0` selects a free port | `7331`                |
+| `logs.per_entry_bytes`       | Retained process/task bytes per entry  | `268435456` (256 MiB) |
+| `logs.total_bytes`           | Total retained process/task bytes      | `4294967296` (4 GiB)  |
+| `timeouts.stop_seconds`      | Graceful stop deadline                 | `10`                  |
+| `timeouts.readiness_seconds` | Startup readiness deadline             | `60`                  |
+| `projects`                   | Project ID to definition mapping       | Empty                 |
 
 A project requires `directory`. It accepts `name`, `notes`, `services`, `tasks`, and `compose_groups`. A relative project directory is relative to the config folder. Relative service/task/group directories are relative to the project directory. A Compose `file` is relative to the group directory.
 

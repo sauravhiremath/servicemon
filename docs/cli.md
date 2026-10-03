@@ -73,20 +73,20 @@ All add commands accept `--name` and `--notes`. Projects require `--directory`. 
 Normal JSON responses have this form:
 
 ```json
-{"ok":true,"data":{"operationId":"..."},"error":null}
+{ "ok": true, "data": { "operationId": "..." }, "error": null }
 ```
 
 Errors have `ok: false`, `data: null`, and an error with `code` and `message`. Errors can also include `details`, `entryId`, and `operationId`. IDs remain stable across display-name changes.
 
 Logs with `--json` use newline-delimited JSON records, not the normal response envelope. Records contain `entryId`, `runId`, `sequence`, `timestamp`, `stream`, and `text`; Compose records also include `containerId`. Streams include `stdout`, `stderr`, `boundary`, and `gap`.
 
-| Exit | Meaning |
-| --- | --- |
-| 0 | Success, or accepted no-wait operation |
-| 1 | Failed command/operation or other error |
-| 2 | Invalid config/input/target, missing config, or unknown entry |
-| 3 | Manager, Docker, or required tool unavailable |
-| 4 | Readiness timeout |
-| 5 | Operation/config busy, config changed during edit, manager conflict, or uncertain ownership |
+| Exit | Meaning                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------- |
+| 0    | Success, or accepted no-wait operation                                                      |
+| 1    | Failed command/operation or other error                                                     |
+| 2    | Invalid config/input/target, missing config, or unknown entry                               |
+| 3    | Manager, Docker, or required tool unavailable                                               |
+| 4    | Readiness timeout                                                                           |
+| 5    | Operation/config busy, config changed during edit, manager conflict, or uncertain ownership |
 
 Check structured error codes instead of parsing human messages. A no-wait command can return 0 and later fail. A readiness timeout does not stop its process.

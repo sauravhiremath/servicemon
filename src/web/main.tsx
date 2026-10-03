@@ -4,5 +4,11 @@ import { App } from './app.js';
 import './styles.css';
 
 const root = document.getElementById('root');
-if (!root) throw new Error('Missing root element.');
-createRoot(root).render(<StrictMode><App /></StrictMode>);
+if (!root) {
+  throw new Error('Missing root element.');
+}
+createRoot(root).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);

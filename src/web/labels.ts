@@ -16,9 +16,15 @@ export const STATE_LABEL: Record<EntryState, string> = {
 type DisplayHealth = Exclude<Health, 'no-check'> | 'none';
 
 export function displayHealth(entry: EntryStatus): DisplayHealth {
-  if (entry.kind === 'task') return 'not-applicable';
-  if ((entry.kind === 'service' && !entry.healthcheck) || entry.health === 'no-check') return 'none';
-  if (entry.state === 'stopped' || entry.state === 'exited' || entry.state === 'failed') return 'none';
+  if (entry.kind === 'task') {
+    return 'not-applicable';
+  }
+  if ((entry.kind === 'service' && !entry.healthcheck) || entry.health === 'no-check') {
+    return 'none';
+  }
+  if (entry.state === 'stopped' || entry.state === 'exited' || entry.state === 'failed') {
+    return 'none';
+  }
   return entry.health;
 }
 
@@ -37,31 +43,59 @@ export const KIND_LABEL: Record<EntryStatus['kind'], string> = {
   compose: 'Compose',
 };
 
-export const STATE_OPTIONS = (Object.keys(STATE_LABEL) as EntryState[]).map((value) => ({ value, label: STATE_LABEL[value] }));
-export const HEALTH_OPTIONS = (Object.keys(HEALTH_LABEL) as DisplayHealth[]).map((value) => ({ value, label: HEALTH_LABEL[value] }));
-export const TYPE_OPTIONS = (Object.keys(KIND_LABEL) as Array<EntryStatus['kind']>).map((value) => ({ value, label: KIND_LABEL[value] }));
+export const STATE_OPTIONS = (Object.keys(STATE_LABEL) as EntryState[]).map((value) => ({
+  value,
+  label: STATE_LABEL[value],
+}));
+export const HEALTH_OPTIONS = (Object.keys(HEALTH_LABEL) as DisplayHealth[]).map((value) => ({
+  value,
+  label: HEALTH_LABEL[value],
+}));
+export const TYPE_OPTIONS = (Object.keys(KIND_LABEL) as Array<EntryStatus['kind']>).map(
+  (value) => ({ value, label: KIND_LABEL[value] }),
+);
 
 export type StatusTone = 'neutral' | 'progress' | 'good' | 'bad';
 
 export function stateTone(state: EntryState): StatusTone {
-  if (state === 'stopped' || state === 'idle') return 'neutral';
-  if (state === 'starting' || state === 'stopping') return 'progress';
-  if (state === 'running' || state === 'succeeded') return 'good';
+  if (state === 'stopped' || state === 'idle') {
+    return 'neutral';
+  }
+  if (state === 'starting' || state === 'stopping') {
+    return 'progress';
+  }
+  if (state === 'running' || state === 'succeeded') {
+    return 'good';
+  }
   return 'bad';
 }
 
 export function healthTone(health: DisplayHealth): StatusTone {
-  if (health === 'healthy') return 'good';
-  if (health === 'unhealthy') return 'bad';
-  if (health === 'checking') return 'progress';
+  if (health === 'healthy') {
+    return 'good';
+  }
+  if (health === 'unhealthy') {
+    return 'bad';
+  }
+  if (health === 'checking') {
+    return 'progress';
+  }
   return 'neutral';
 }
 
 export function actionProgress(action: string): string {
-  if (action === 'start') return 'Starting';
-  if (action === 'stop') return 'Stopping';
-  if (action === 'restart') return 'Restarting';
-  if (action === 'run') return 'Run in progress';
+  if (action === 'start') {
+    return 'Starting';
+  }
+  if (action === 'stop') {
+    return 'Stopping';
+  }
+  if (action === 'restart') {
+    return 'Restarting';
+  }
+  if (action === 'run') {
+    return 'Run in progress';
+  }
   return 'In progress';
 }
 

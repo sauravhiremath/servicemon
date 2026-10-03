@@ -1,11 +1,11 @@
 services:
   db:
     image: ubuntu:24.04
-    command: ["sleep", "600"]
+    command: ['sleep', '600']
     environment:
       GREETING: ${GREETING:-unset}
     healthcheck:
-      test: ["CMD", "true"]
+      test: ['CMD', 'true']
       interval: 1s
       timeout: 1s
       retries: 5
@@ -13,22 +13,22 @@ services:
       - data:/var/lib/data
   app:
     image: ubuntu:24.04
-    command: ["sh", "-c", "echo compose-log-marker; sleep 600"]
+    command: ['sh', '-c', 'echo compose-log-marker; sleep 600']
     depends_on:
       db:
         condition: service_healthy
         required: true
     healthcheck:
-      test: ["CMD", "true"]
+      test: ['CMD', 'true']
       interval: 1s
       timeout: 1s
       retries: 5
   web:
     image: ubuntu:24.04
-    command: ["sh", "-c", "echo web-log-marker; sleep 600"]
+    command: ['sh', '-c', 'echo web-log-marker; sleep 600']
     scale: 2
     healthcheck:
-      test: ["CMD", "true"]
+      test: ['CMD', 'true']
       interval: 1s
       timeout: 1s
       retries: 5

@@ -13,9 +13,15 @@ const groups: number[] = [];
 
 afterEach(async () => {
   for (const pid of groups.splice(0)) {
-    try { process.kill(-pid, 'SIGKILL'); } catch { /* The group is already gone. */ }
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch {
+      /* The group is already gone. */
+    }
   }
-  await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+  await Promise.all(
+    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
+  );
 });
 
 describe('owned processes', () => {
@@ -24,15 +30,31 @@ describe('owned processes', () => {
     const work = join(directory, 'work');
     await mkdir(work, { recursive: true });
     const marker = join(directory, 'marker');
-    const { adapter, logs } = open(directory, [service(work, `node -e 'require("fs").writeFileSync(process.env.OUT, process.cwd()+"\\n"+process.env.FOO); process.stdout.write("out\\n"); process.stderr.write("err\\n")'`, { stopSeconds: 2 })]);
-    await adapter.start(service(work, `node -e 'require("fs").writeFileSync(process.env.OUT, process.cwd()+"\\n"+process.env.FOO); process.stdout.write("out\\n"); process.stderr.write("err\\n")'`), { ...process.env, OUT: marker, FOO: 'from-snapshot' });
+    const { adapter, logs } = open(directory, [
+      service(
+        work,
+        `node -e 'require("fs").writeFileSync(process.env.OUT, process.cwd()+"\\n"+process.env.FOO); process.stdout.write("out\\n"); process.stderr.write("err\\n")'`,
+        { stopSeconds: 2 },
+      ),
+    ]);
+    await adapter.start(
+      service(
+        work,
+        `node -e 'require("fs").writeFileSync(process.env.OUT, process.cwd()+"\\n"+process.env.FOO); process.stdout.write("out\\n"); process.stderr.write("err\\n")'`,
+      ),
+      { ...process.env, OUT: marker, FOO: 'from-snapshot' },
+    );
     await waitFor(() => adapter.status('proj/api').state === 'exited');
     expect(await readFile(marker, 'utf8')).toBe(`${await realpath(work)}\nfrom-snapshot`);
     logs.close();
     const reopened = new LogStore(directory, { perEntryBytes: 1_000_000, totalBytes: 1_000_000 });
     const history = reopened.history('proj/api');
-    expect(history.records.some((record) => record.stream === 'stdout' && record.text.includes('out'))).toBe(true);
-    expect(history.records.some((record) => record.stream === 'stderr' && record.text.includes('err'))).toBe(true);
+    expect(
+      history.records.some((record) => record.stream === 'stdout' && record.text.includes('out')),
+    ).toBe(true);
+    expect(
+      history.records.some((record) => record.stream === 'stderr' && record.text.includes('err')),
+    ).toBe(true);
     expect(history.records.some((record) => record.stream === 'boundary')).toBe(true);
     expect(history.records.some((record) => record.text.includes('from-snapshot'))).toBe(false);
     reopened.close();
@@ -58,12 +80,18 @@ describe('owned processes', () => {
 
   it('kills a group that ignores SIGTERM and does not restart an unexpected exit', async () => {
     const directory = await tempDir();
-    const stubborn = service(directory, `node -e 'process.on("SIGTERM",()=>{}); console.log("ready"); setInterval(()=>{},500)'`, { stopSeconds: 1 });
+    const stubborn = service(
+      directory,
+      `node -e 'process.on("SIGTERM",()=>{}); console.log("ready"); setInterval(()=>{},500)'`,
+      { stopSeconds: 1 },
+    );
     const { adapter, logs } = open(directory, [stubborn]);
     await adapter.start(stubborn, process.env);
     const pid = adapter.status(stubborn.id).pid!;
     groups.push(pid);
-    await waitFor(() => logs.history(stubborn.id).records.some(record => record.text.includes('ready')));
+    await waitFor(() =>
+      logs.history(stubborn.id).records.some((record) => record.text.includes('ready')),
+    );
     const started = Date.now();
     await adapter.stop(stubborn);
     expect(Date.now() - started).toBeGreaterThanOrEqual(900);
@@ -76,7 +104,11 @@ describe('owned processes', () => {
     await waitFor(() => adapter.status(exiting.id).state === 'exited');
     const status = adapter.status(exiting.id);
     await delay(200);
-    expect(adapter.status(exiting.id)).toMatchObject({ state: 'exited', pid: status.pid, exit: { code: 3 } });
+    expect(adapter.status(exiting.id)).toMatchObject({
+      state: 'exited',
+      pid: status.pid,
+      exit: { code: 3 },
+    });
     await adapter.shutdown();
   });
 
@@ -111,7 +143,9 @@ describe('owned processes', () => {
     expect(status.error).toContain('Ownership conflict');
     expect(status.pid).toBe(pid);
     expect(status.runId).toBe(first.adapter.status(entry.id).runId);
-    await expect(second.adapter.start(entry, process.env)).rejects.toMatchObject({ code: 'OWNERSHIP_CONFLICT' });
+    await expect(second.adapter.start(entry, process.env)).rejects.toMatchObject({
+      code: 'OWNERSHIP_CONFLICT',
+    });
     await expect(second.adapter.stop(entry)).rejects.toMatchObject({ code: 'OWNERSHIP_CONFLICT' });
     expect(alive(pid)).toBe(true);
     await first.adapter.stop(entry);
@@ -154,13 +188,22 @@ describe('owned processes', () => {
 
   it('emits bounded no-newline output and shuts down every owned group', async () => {
     const directory = await tempDir();
-    const noisy = service(directory, `node -e 'process.stdout.write("x".repeat(100000)); setInterval(()=>{},1000)'`);
+    const noisy = service(
+      directory,
+      `node -e 'process.stdout.write("x".repeat(100000)); setInterval(()=>{},1000)'`,
+    );
     const other = { ...service(directory, 'sleep 30'), id: 'proj/other', key: 'other' };
     const { adapter, logs } = open(directory, [noisy, other]);
     await adapter.start(noisy, process.env);
     await adapter.start(other, process.env);
     groups.push(adapter.status(noisy.id).pid!, adapter.status(other.id).pid!);
-    await waitFor(() => logs.history(noisy.id).records.filter((record) => record.stream === 'stdout').reduce((sum, record) => sum + record.text.length, 0) === 100000);
+    await waitFor(
+      () =>
+        logs
+          .history(noisy.id)
+          .records.filter((record) => record.stream === 'stdout')
+          .reduce((sum, record) => sum + record.text.length, 0) === 100000,
+    );
     const records = logs.history(noisy.id).records.filter((record) => record.stream === 'stdout');
     expect(records.every((record) => Buffer.byteLength(record.text) <= 16 * 1024)).toBe(true);
     const owned = [adapter.status(noisy.id).pid!, adapter.status(other.id).pid!];
@@ -185,7 +228,10 @@ describe('owned processes', () => {
 
 function open(directory: string, entries: Entry[]) {
   const logs = new LogStore(directory, { perEntryBytes: 1_000_000, totalBytes: 4_000_000 });
-  return { logs, adapter: new ProcessAdapter(entries, process.env, logs, directory, () => undefined) };
+  return {
+    logs,
+    adapter: new ProcessAdapter(entries, process.env, logs, directory, () => undefined),
+  };
 }
 
 function service(directory: string, command: string, extra: Partial<Entry> = {}): Entry {
@@ -196,7 +242,12 @@ function command(directory: string, text: string, kind: Entry['kind']): Entry {
   return commandEntry(directory, text, kind);
 }
 
-function commandEntry(directory: string, command: string, kind: Entry['kind'], extra: Partial<Entry> = {}): Entry {
+function commandEntry(
+  directory: string,
+  command: string,
+  kind: Entry['kind'],
+  extra: Partial<Entry> = {},
+): Entry {
   return {
     id: 'proj/api',
     projectId: 'proj',
@@ -240,9 +291,10 @@ function delay(ms: number): Promise<void> {
 async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<void> {
   const deadline = Date.now() + 8000;
   while (Date.now() < deadline) {
-    if (await predicate()) return;
+    if (await predicate()) {
+      return;
+    }
     await delay(30);
   }
   throw new Error('Condition was not met.');
 }
-

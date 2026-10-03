@@ -6,12 +6,19 @@ import { docker, makeGroup, removeGroup, waitFor } from './support.js';
 
 async function entriesFor(group: Parameters<typeof discoverGroups>[0][number]): Promise<Entry[]> {
   const discovery = (await discoverGroups([group], process.env)).get(group.id);
-  if (!discovery) throw new Error('missing discovery');
+  if (!discovery) {
+    throw new Error('missing discovery');
+  }
   return composeEntries(group, discovery, { stopSeconds: 5, readinessSeconds: 30 });
 }
 
 function containersOf(status: { containers?: unknown }): ComposeContainer[] {
-  return Array.isArray(status.containers) ? status.containers.filter((item): item is ComposeContainer => Boolean(item) && typeof item === 'object' && 'id' in item && typeof item.id === 'string') : [];
+  return Array.isArray(status.containers)
+    ? status.containers.filter(
+        (item): item is ComposeContainer =>
+          Boolean(item) && typeof item === 'object' && 'id' in item && typeof item.id === 'string',
+      )
+    : [];
 }
 
 describe('ComposeAdapter', () => {
@@ -19,7 +26,23 @@ describe('ComposeAdapter', () => {
     const group = await makeGroup();
     try {
       const entries = await entriesFor(group);
-      const created = await docker(['compose', '--project-name', group.projectName, '--project-directory', group.directory, '--file', group.file, 'up', '-d', '--pull', 'never', 'db'], group.directory);
+      const created = await docker(
+        [
+          'compose',
+          '--project-name',
+          group.projectName,
+          '--project-directory',
+          group.directory,
+          '--file',
+          group.file,
+          'up',
+          '-d',
+          '--pull',
+          'never',
+          'db',
+        ],
+        group.directory,
+      );
       expect(created.code, created.stderr).toBe(0);
       const adapter = new ComposeAdapter(entries, [group], process.env, () => {});
       try {
@@ -29,7 +52,10 @@ describe('ComposeAdapter', () => {
         expect(status.health === 'healthy' || status.health === 'checking').toBe(true);
         const id = containersOf(status)[0]?.id;
         expect(id).toBeTruthy();
-        const inspected = await docker(['inspect', '-f', '{{index .Config.Labels "com.docker.compose.project"}}', id!], group.directory);
+        const inspected = await docker(
+          ['inspect', '-f', '{{index .Config.Labels "com.docker.compose.project"}}', id!],
+          group.directory,
+        );
         expect(inspected.stdout.trim()).toBe(group.projectName);
       } finally {
         await adapter.shutdown();
@@ -40,7 +66,9 @@ describe('ComposeAdapter', () => {
   });
 
   it('does not start a service while its Compose health dependency is unhealthy', async () => {
-    const group = await makeGroup(`services:\n  db:\n    image: ubuntu:24.04\n    command: ["sleep", "600"]\n    healthcheck:\n      test: ["CMD", "false"]\n      interval: 1s\n      timeout: 1s\n      retries: 2\n  app:\n    image: ubuntu:24.04\n    command: ["sleep", "600"]\n    depends_on:\n      db:\n        condition: service_healthy\n`);
+    const group = await makeGroup(
+      `services:\n  db:\n    image: ubuntu:24.04\n    command: ["sleep", "600"]\n    healthcheck:\n      test: ["CMD", "false"]\n      interval: 1s\n      timeout: 1s\n      retries: 2\n  app:\n    image: ubuntu:24.04\n    command: ["sleep", "600"]\n    depends_on:\n      db:\n        condition: service_healthy\n`,
+    );
     try {
       const entries = await entriesFor(group);
       const app = entries.find((entry) => entry.composeService === 'app');
@@ -71,14 +99,23 @@ describe('ComposeAdapter', () => {
         await adapter.stop(app);
         expect(adapter.status(app.id).state).not.toBe('running');
         expect(adapter.status(db.id).state).toBe('running');
-        const volume = await docker(['volume', 'inspect', `${group.projectName}_data`], group.directory);
+        const volume = await docker(
+          ['volume', 'inspect', `${group.projectName}_data`],
+          group.directory,
+        );
         expect(volume.code, volume.stderr).toBe(0);
         const dbId = containersOf(adapter.status(db.id))[0]?.id;
         expect(dbId).toBeTruthy();
         await adapter.shutdown();
-        const running = await docker(['inspect', '-f', '{{.State.Running}}', dbId!], group.directory);
+        const running = await docker(
+          ['inspect', '-f', '{{.State.Running}}', dbId!],
+          group.directory,
+        );
         expect(running.stdout.trim()).toBe('true');
-        const volumeAfter = await docker(['volume', 'inspect', `${group.projectName}_data`], group.directory);
+        const volumeAfter = await docker(
+          ['volume', 'inspect', `${group.projectName}_data`],
+          group.directory,
+        );
         expect(volumeAfter.code).toBe(0);
       } finally {
         await adapter.shutdown();
@@ -100,31 +137,98 @@ describe('ComposeAdapter', () => {
         const first = containersOf(adapter.status(web.id));
         expect(first).toHaveLength(2);
         expect(adapter.status(web.id).health).toBe('healthy');
-        await waitFor(async () => (await adapter.history(web.id)).records.some((record) => record.text.includes('web-log-marker') && first.some((container) => container.id === record.containerId)));
+        await waitFor(async () =>
+          (await adapter.history(web.id)).records.some(
+            (record) =>
+              record.text.includes('web-log-marker') &&
+              first.some((container) => container.id === record.containerId),
+          ),
+        );
         const beforeReplacement = await adapter.history(web.id);
-        const extra = await docker(['compose', '--project-name', group.projectName, '--project-directory', group.directory, '--file', group.file, 'create', '--scale', 'web=3', '--no-recreate', '--pull', 'never', '-y', 'web'], group.directory);
+        const extra = await docker(
+          [
+            'compose',
+            '--project-name',
+            group.projectName,
+            '--project-directory',
+            group.directory,
+            '--file',
+            group.file,
+            'create',
+            '--scale',
+            'web=3',
+            '--no-recreate',
+            '--pull',
+            'never',
+            '-y',
+            'web',
+          ],
+          group.directory,
+        );
         expect(extra.code, extra.stderr).toBe(0);
         const unchanged = await adapter.history(web.id, { after: beforeReplacement.cursor });
         expect(unchanged.records).toEqual([]);
         expect(unchanged.cursor).toBe(beforeReplacement.cursor);
         expect(unchanged.gap).toBe(false);
-        const replaced = await docker(['compose', '--project-name', group.projectName, '--project-directory', group.directory, '--file', group.file, 'up', '-d', '--force-recreate', '--no-deps', '--pull', 'never', 'web'], group.directory);
+        const replaced = await docker(
+          [
+            'compose',
+            '--project-name',
+            group.projectName,
+            '--project-directory',
+            group.directory,
+            '--file',
+            group.file,
+            'up',
+            '-d',
+            '--force-recreate',
+            '--no-deps',
+            '--pull',
+            'never',
+            'web',
+          ],
+          group.directory,
+        );
         expect(replaced.code, replaced.stderr).toBe(0);
         await waitFor(() => {
           const ids = containersOf(adapter.status(web.id)).map((container) => container.id);
-          return ids.length === 2 && ids.every((id) => !first.some((container) => container.id === id));
+          return (
+            ids.length === 2 && ids.every((id) => !first.some((container) => container.id === id))
+          );
         });
         const next = containersOf(adapter.status(web.id));
-        expect(next.map((container) => container.id)).not.toEqual(expect.arrayContaining(first.map((container) => container.id)));
-        await waitFor(async () => (await adapter.history(web.id)).records.some((record) => record.text.includes('web-log-marker') && next.some((container) => container.id === record.containerId)));
+        expect(next.map((container) => container.id)).not.toEqual(
+          expect.arrayContaining(first.map((container) => container.id)),
+        );
+        await waitFor(async () =>
+          (await adapter.history(web.id)).records.some(
+            (record) =>
+              record.text.includes('web-log-marker') &&
+              next.some((container) => container.id === record.containerId),
+          ),
+        );
         const continued = await adapter.history(web.id, { after: beforeReplacement.cursor });
-        expect(continued.records.some((record) => record.text.includes('web-log-marker') && next.some((container) => container.id === record.containerId))).toBe(true);
-        expect(continued.records.every((record) => record.sequence > beforeReplacement.cursor)).toBe(true);
+        expect(
+          continued.records.some(
+            (record) =>
+              record.text.includes('web-log-marker') &&
+              next.some((container) => container.id === record.containerId),
+          ),
+        ).toBe(true);
+        expect(
+          continued.records.every((record) => record.sequence > beforeReplacement.cursor),
+        ).toBe(true);
         await adapter.shutdown();
         const restarted = new ComposeAdapter(entries, [group], process.env, () => {});
         try {
           const history = await restarted.history(web.id, { tail: 20 });
-          expect(history.records.some((record) => record.text.includes('web-log-marker') && next.some((container) => container.id === record.containerId))).toBe(true);
+          expect(
+            history.records.some(
+              (record) =>
+                record.text.includes('web-log-marker') &&
+                next.some((container) => container.id === record.containerId),
+            ),
+          ).toBe(true);
         } finally {
           await restarted.shutdown();
         }
@@ -142,7 +246,23 @@ describe('ComposeAdapter', () => {
       const entries = await entriesFor(group);
       const db = entries.find((entry) => entry.composeService === 'db');
       expect(db).toBeTruthy();
-      const created = await docker(['compose', '--project-name', group.projectName, '--project-directory', group.directory, '--file', group.file, 'create', '--pull', 'never', '-y', 'db'], group.directory);
+      const created = await docker(
+        [
+          'compose',
+          '--project-name',
+          group.projectName,
+          '--project-directory',
+          group.directory,
+          '--file',
+          group.file,
+          'create',
+          '--pull',
+          'never',
+          '-y',
+          'db',
+        ],
+        group.directory,
+      );
       expect(created.code, created.stderr).toBe(0);
       const adapter = new ComposeAdapter(entries, [group], process.env, () => {});
       try {
@@ -171,7 +291,9 @@ describe('ComposeAdapter', () => {
         expect(id).toBeTruthy();
         const paused = await docker(['pause', id!], group.directory);
         expect(paused.code, paused.stderr).toBe(0);
-        await waitFor(() => containersOf(adapter.status(db.id)).some((container) => container.state === 'paused'));
+        await waitFor(() =>
+          containersOf(adapter.status(db.id)).some((container) => container.state === 'paused'),
+        );
         expect(adapter.status(db.id).state).toBe('running');
         await docker(['unpause', id!], group.directory);
       } finally {
@@ -189,7 +311,23 @@ describe('ComposeAdapter', () => {
     bad.key = 'broken';
     try {
       const entries = await entriesFor(good);
-      const created = await docker(['compose', '--project-name', good.projectName, '--project-directory', good.directory, '--file', good.file, 'up', '-d', '--pull', 'never', 'db'], good.directory);
+      const created = await docker(
+        [
+          'compose',
+          '--project-name',
+          good.projectName,
+          '--project-directory',
+          good.directory,
+          '--file',
+          good.file,
+          'up',
+          '-d',
+          '--pull',
+          'never',
+          'db',
+        ],
+        good.directory,
+      );
       expect(created.code, created.stderr).toBe(0);
       const adapter = new ComposeAdapter(entries, [good, bad], process.env, () => {});
       try {

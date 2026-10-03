@@ -1,8 +1,16 @@
+.DS_Store
+.vscode/*
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.scratch
+
 node_modules/
+
 dist/
 test-results/
 playwright-report/
 *.tgz
-.DS_Store
 .orca/
 release-artifacts/

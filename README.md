@@ -32,7 +32,7 @@ Create `~/.config/servicemon/config.yaml`:
 version: 1
 projects:
   demo:
-    directory: "~"
+    directory: '~'
     services:
       api:
         command: 'echo ready; exec sleep 600'

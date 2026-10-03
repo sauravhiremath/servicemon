@@ -1,6 +1,9 @@
 import { expect, test } from './manager.js';
 
-test('opens retained live logs in one dark tab per entry and pauses follow', async ({ page, manager }) => {
+test('opens retained live logs in one dark tab per entry and pauses follow', async ({
+  page,
+  manager,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const dialogs: string[] = [];
   page.on('dialog', (dialog) => {
@@ -9,31 +12,52 @@ test('opens retained live logs in one dark tab per entry and pauses follow', asy
   });
   await page.goto(manager.url);
   await page.getByRole('button', { name: 'Start Fixture A/talker' }).click();
-  await expect(page.getByRole('row', { name: /talker/ }).getByText('Running')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('row', { name: /talker/ }).getByText('Running')).toBeVisible({
+    timeout: 15000,
+  });
   await page.getByRole('button', { name: 'Logs for Fixture A/talker' }).click();
   const log = page.getByRole('log', { name: 'Logs for Fixture A/talker' });
   await expect(log).toContainText('hello-fixture');
   await expect(log).toContainText('<script>alert(1)</script>');
   expect(dialogs).toEqual([]);
-  await expect(log.locator('p').filter({ hasText: 'LOG: routine checkpoint' })).not.toHaveClass(/log-line-error/);
-  await expect(log.locator('p').filter({ hasText: 'WARNING: fixture warning' })).toHaveClass(/log-line-warning/);
-  await expect(log.locator('p').filter({ hasText: 'ERROR: fixture error' })).toHaveClass(/log-line-error/);
+  await expect(log.locator('p').filter({ hasText: 'LOG: routine checkpoint' })).not.toHaveClass(
+    /log-line-error/,
+  );
+  await expect(log.locator('p').filter({ hasText: 'WARNING: fixture warning' })).toHaveClass(
+    /log-line-warning/,
+  );
+  await expect(log.locator('p').filter({ hasText: 'ERROR: fixture error' })).toHaveClass(
+    /log-line-error/,
+  );
 
   await page.getByRole('button', { name: 'Logs for Fixture A/svc-01' }).click();
-  await expect(page.getByRole('tab', { name: 'Fixture A/svc-01' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Fixture A/svc-01' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await page.getByRole('tab', { name: 'Fixture A/talker' }).click();
   await expect(log).toContainText('hello-fixture');
   await expect(log).toContainText('line-4');
-  await expect.poll(() => log.evaluate(node => node.scrollHeight - node.clientHeight)).toBeGreaterThan(24);
-  await log.evaluate((node) => { node.scrollTop = 0; });
-  await expect(page.getByRole('button', { name: 'Follow latest', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect
+    .poll(() => log.evaluate((node) => node.scrollHeight - node.clientHeight))
+    .toBeGreaterThan(24);
+  await log.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  await expect(page.getByRole('button', { name: 'Follow latest', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
   const before = await log.evaluate((node) => node.scrollTop);
   const seen = await log.innerText();
   await expect.poll(async () => log.innerText()).not.toBe(seen);
   expect(await log.evaluate((node) => node.scrollTop)).toBe(before);
 
   await page.getByRole('button', { name: /Go to latest/ }).click();
-  await expect(page.getByRole('button', { name: 'Follow latest', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Follow latest', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   const handle = page.getByRole('separator', { name: 'Resize log panel' });
   await handle.focus();
   await page.keyboard.press('ArrowUp');
@@ -75,18 +99,23 @@ test('keeps the last row controls reachable with the log panel open', async ({ p
   }
 });
 
-test('highlights whole tabs and resizes freely through the former snap range', async ({ page, manager }) => {
+test('highlights whole tabs and resizes freely through the former snap range', async ({
+  page,
+  manager,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(manager.url);
   await page.getByRole('button', { name: 'Logs for Fixture A/talker' }).click();
   const tab = page.getByRole('tab', { name: 'Fixture A/talker' });
   const wrapper = tab.locator('..');
-  const background = () => wrapper.evaluate(node => getComputedStyle(node).backgroundColor);
+  const background = () => wrapper.evaluate((node) => getComputedStyle(node).backgroundColor);
   const initial = await background();
   await tab.hover();
   const highlighted = await background();
   expect(highlighted).not.toBe(initial);
-  expect(await tab.evaluate(node => getComputedStyle(node).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+  expect(await tab.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(
+    'rgba(0, 0, 0, 0)',
+  );
   await page.getByRole('button', { name: 'Close logs for Fixture A/talker' }).hover();
   expect(await background()).toBe(highlighted);
 
@@ -100,7 +129,9 @@ test('highlights whole tabs and resizes freely through the former snap range', a
   for (const height of [260, 240, 220, 180, 120, 60, 30, 100, 220, 260, bounds.height - 180]) {
     const targetY = bounds.y + height;
     await page.mouse.move(x, targetY, { steps: 5 });
-    await expect.poll(async () => Math.abs((await handle.boundingBox())!.y + grip.height / 2 - targetY)).toBeLessThan(3);
+    await expect
+      .poll(async () => Math.abs((await handle.boundingBox())!.y + grip.height / 2 - targetY))
+      .toBeLessThan(3);
   }
   await page.mouse.up();
   const savedY = (await handle.boundingBox())!.y;

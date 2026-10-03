@@ -8,7 +8,9 @@ import { LogStore } from '../../src/logs/store.js';
 const directories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+  await Promise.all(
+    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
+  );
 });
 
 describe('stream decoder', () => {
@@ -59,7 +61,9 @@ describe('log store', () => {
     const seen: string[] = [];
     store.subscribe('proj/api', (record) => seen.push(record.stream));
     const started = Date.now();
-    for (let index = 0; index < 100; index += 1) store.append('proj/api', 'run-1', 'stdout', 'x');
+    for (let index = 0; index < 100; index += 1) {
+      store.append('proj/api', 'run-1', 'stdout', 'x');
+    }
     expect(Date.now() - started).toBeLessThan(200);
     expect(seen).toEqual([]);
     await flush();
@@ -74,7 +78,9 @@ describe('log store', () => {
     const store = new LogStore(directory, { perEntryBytes: 10_000, totalBytes: 10_000 });
     const live: number[] = [];
     store.subscribe('proj/api', (record) => {
-      if (record.stream !== 'gap') live.push(record.sequence);
+      if (record.stream !== 'gap') {
+        live.push(record.sequence);
+      }
     });
     store.append('proj/api', 'run-1', 'boundary', 'run started');
     store.append('proj/api', 'run-1', 'stdout', 'one');
@@ -85,7 +91,11 @@ describe('log store', () => {
     const sequences = [...history.records, ...next.records].map((record) => record.sequence);
     expect(new Set(sequences).size).toBe(sequences.length);
     expect(next.records.map((record) => record.text)).toEqual(['two']);
-    expect(live.filter((sequence) => sequence <= history.cursor).every((sequence) => history.records.some((record) => record.sequence === sequence))).toBe(true);
+    expect(
+      live
+        .filter((sequence) => sequence <= history.cursor)
+        .every((sequence) => history.records.some((record) => record.sequence === sequence)),
+    ).toBe(true);
     store.close();
   });
 

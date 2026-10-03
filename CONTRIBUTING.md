@@ -80,6 +80,9 @@ Closing the browser or terminal does not stop a background manager. If you lose 
 After setup, run these checks from the repository root:
 
 ```sh
+npm run lint
+npm run format:check
+npm run knip
 npm run typecheck
 npm test
 npx --no-install playwright install chromium
@@ -88,6 +91,26 @@ npm run smoke
 ```
 
 `npm test` builds and runs unit and integration tests. `test:e2e` builds and runs browser tests. `smoke` builds and installs a temporary package, then checks the installed CLI and dashboard. These commands do not update a global installation.
+
+### Linting and formatting
+
+Oxlint checks correctness, React hooks, JSX accessibility, and type-aware promise use. Warnings, errors, and unused disable comments fail the lint command.
+Import rules require one sorted import block, no duplicate imports, type-only imports where applicable, and a blank line after imports. Control-flow statements require braces. Variables that are not reassigned use `const`.
+Oxfmt formats supported source, test, config, and documentation files. Both commands use the repository root by default.
+
+```sh
+npm run lint:fix
+npm run format
+```
+
+`lint:fix` applies safe automatic fixes. Fix any remaining findings by hand. CI runs the read-only `lint`, `format:check`, and `knip` commands.
+Knip checks unused files, exports, and dependencies. Remove unused code instead of adding broad exclusions.
+
+The lint config leaves React Compiler rules off because this project does not use React Compiler.
+It permits valid ARIA roles without requiring different HTML tags. It also permits empty object parameters required by Playwright fixtures.
+Tests stay in scope. Generated output and `package-lock.json` are not formatted.
+
+### Optional platform checks
 
 A real macOS GUI login session is needed for the startup checks. With a running Docker engine and Compose v2 or later, also run:
 
