@@ -1,0 +1,8 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+*.tgz
+.DS_Store
+.orca/
+release-artifacts/

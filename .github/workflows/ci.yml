@@ -1,0 +1,46 @@
+name: Source checks
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: ['24.0.0', homebrew]
+    env:
+      SERVICEMON_SKIP_LAUNCHD: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        if: matrix.runtime == '24.0.0'
+        with:
+          node-version: '24.0.0'
+      - name: Select current Homebrew Node
+        if: matrix.runtime == 'homebrew'
+        run: |
+          brew install node
+          echo "$(brew --prefix node)/bin" >> "$GITHUB_PATH"
+      - name: Record actual platform
+        run: |
+          sw_vers
+          uname -m
+          node --version
+          npm --version
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx vitest run
+      - run: npx --no-install playwright install chromium
+      - run: npx playwright test
+      - run: npm run smoke
+      - run: npm run check:runtime
+      - name: State test coverage
+        run: echo 'This job does not run GUI launchd, Compose, second-account, or Homebrew lifecycle checks.'

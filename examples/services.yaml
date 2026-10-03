@@ -1,0 +1,30 @@
+# Example only. Create the project folders and check commands before use.
+# No entry starts automatically. Commands load their own environment files.
+version: 1
+projects:
+  demo:
+    directory: ~/work/demo
+    services:
+      api:
+        command: npm run dev
+        links: [http://127.0.0.1:8000/health]
+        healthcheck:
+          type: http
+          url: http://127.0.0.1:8000/health
+    tasks:
+      check:
+        command: npm test
+  storage:
+    directory: ~/work/storage
+    compose_groups:
+      infra:
+        file: compose.yaml
+        project_name: servicemon-example-storage
+    tasks:
+      seed:
+        command: npm run seed
+        depends_on: [infra.database]
+    services:
+      worker:
+        command: npm run worker
+        depends_on: [seed]

@@ -1,0 +1,42 @@
+name: Source archive
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Reviewed full commit SHA or version tag
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: macos-15
+    env:
+      RELEASE_REF: ${{ inputs.ref }}
+      SERVICEMON_SKIP_LAUNCHD: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select Homebrew runtime
+        run: |
+          brew install node gitleaks
+          echo "$(brew --prefix node)/bin" >> "$GITHUB_PATH"
+      - run: gitleaks git . --log-opts=--all --redact --no-banner
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npx vitest run
+      - run: npx --no-install playwright install chromium
+      - run: npx playwright test
+      - run: npm run check:runtime
+      - name: Build exact reviewed source archive
+        run: npm run release:source -- --ref "$RELEASE_REF"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: source-archive
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 7
