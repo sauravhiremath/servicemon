@@ -1,4 +1,4 @@
-name: Source archive
+name: Release
 on:
   workflow_dispatch:
     inputs:
@@ -6,14 +6,28 @@ on:
         description: Reviewed full commit SHA or version tag
         required: true
         type: string
+      publish:
+        description: Publish the checked archive as a GitHub release
+        type: boolean
+        default: false
 permissions:
   contents: read
+concurrency:
+  group: servicemon-release
+  cancel-in-progress: false
 jobs:
   candidate:
     runs-on: macos-15
+    outputs:
+      commit: ${{ steps.metadata.outputs.commit }}
+      version: ${{ steps.metadata.outputs.version }}
     env:
       RELEASE_REF: ${{ inputs.ref }}
       SERVICEMON_SKIP_LAUNCHD: '1'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+      HOMEBREW_NO_AUTOREMOVE: '1'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -26,17 +40,92 @@ jobs:
           echo "$(brew --prefix node)/bin" >> "$GITHUB_PATH"
       - run: gitleaks git . --log-opts=--all --redact --no-banner
       - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run knip
       - run: npm run typecheck
       - run: npm run build
-      - run: npx vitest run
+      - run: npx --no-install vitest run
       - run: npx --no-install playwright install chromium
-      - run: npx playwright test
+      - run: npx --no-install playwright test
       - run: npm run check:runtime
       - name: Build exact reviewed source archive
         run: npm run release:source -- --ref "$RELEASE_REF"
+      - name: Read checked archive metadata
+        id: metadata
+        run: |
+          echo "commit=$(jq -r .commit release-artifacts/manifest.json)" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version release-artifacts/manifest.json)" >> "$GITHUB_OUTPUT"
+      - name: Check an existing version tag
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          RELEASE_COMMIT: ${{ steps.metadata.outputs.commit }}
+        run: |
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            test "$(git rev-parse "v$VERSION^{commit}")" = "$RELEASE_COMMIT"
+          fi
+      - name: Generate notes from commit messages
+        run: node scripts/release-notes.mjs --manifest release-artifacts/manifest.json
+      - name: Check Homebrew installation and reinstall
+        run: |
+          brew tap-new --no-git servicemon/release
+          tap="$(brew --repository servicemon/release)"
+          npm run release:formula -- --manifest release-artifacts/manifest.json --tap "$tap"
+          brew trust --formula servicemon/release/servicemon
+          brew style servicemon/release/servicemon
+          brew audit --strict --formula servicemon/release/servicemon
+          brew install --build-from-source --yes servicemon/release/servicemon
+          brew test servicemon/release/servicemon
+          brew reinstall --build-from-source servicemon/release/servicemon
+          brew test servicemon/release/servicemon
+          brew uninstall servicemon/release/servicemon
+      - name: Prepare formula for the release URL
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          npm run release:formula -- \
+            --manifest release-artifacts/manifest.json \
+            --tap "$RUNNER_TEMP/public-tap" \
+            --url "https://github.com/sauravhiremath/servicemon/releases/download/v$VERSION/servicemon-$VERSION-source.tar.gz"
+          cp "$RUNNER_TEMP/public-tap/Formula/servicemon.rb" release-artifacts/servicemon.rb
       - uses: actions/upload-artifact@v7
         with:
-          name: source-archive
+          name: release-candidate
           path: release-artifacts/
           if-no-files-found: error
           retention-days: 7
+      - name: State remaining manual checks
+        run: echo 'This workflow does not check GUI logout/login, second-account access, Compose, or cross-version upgrades and recovery.'
+  publish:
+    if: inputs.publish
+    needs: candidate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.candidate.outputs.version }}
+      RELEASE_COMMIT: ${{ needs.candidate.outputs.commit }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-candidate
+          path: release-artifacts
+      - name: Publish checked bytes and commit-based notes
+        working-directory: release-artifacts
+        run: |
+          sha256sum --check "servicemon-$VERSION-source.tar.gz.sha256"
+          gh release create "v$VERSION" \
+            "servicemon-$VERSION-source.tar.gz" \
+            "servicemon-$VERSION-source.tar.gz.sha256" \
+            manifest.json servicemon.rb \
+            --target "$RELEASE_COMMIT" \
+            --title "Servicemon $VERSION" \
+            --notes-file release-notes.md
+      - name: Verify uploaded source archive
+        working-directory: release-artifacts
+        run: |
+          gh release download "v$VERSION" --pattern "servicemon-$VERSION-source.tar.gz" --dir downloaded
+          cd downloaded
+          sha256sum --check "../servicemon-$VERSION-source.tar.gz.sha256"

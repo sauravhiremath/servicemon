@@ -35,5 +35,4 @@ Plans and acceptance records describe earlier work. They are not a new task list
 
 - Write user docs for the current product, not the preparation process. Avoid future-work disclaimers, and internal review notes.
 - Keep the main product description platform-neutral. State current platform support separately in the README.
-- Keep changes in `CHANGELOG.md` very lean and in simplified list form. No proses
 - Release preparation is not permission to publish. Changing repository visibility, publishing a release, or publishing the Homebrew tap needs explicit approval.

@@ -12,6 +12,27 @@ Homebrew and source builds are the install methods. `package.json` uses `private
 
 `package.json` is the version source. The CLI reads the installed metadata. Use `npm version <version> --no-git-tag-version` to change the package and lockfile versions. Match the Git tag, archive name, and formula version to that value. Never replace the bytes of a published version.
 
+## GitHub Actions
+
+The **Source checks** workflow runs on pushes and pull requests. It checks the minimum Node runtime and current Homebrew Node.
+
+The **Release** workflow checks one committed revision. It runs source checks, browser tests, installed-package checks, and Homebrew source installation, functional tests, reinstall, and removal. It creates a `release-candidate` artifact with the archive, checksum, manifest, public-URL formula, and release notes. Artifacts expire after seven days.
+
+Run it without publication first:
+
+```sh
+gh workflow run release.yml --repo sauravhiremath/servicemon \
+  -f ref=<full-commit-sha> -F publish=false
+```
+
+Only `publish=true` enables the separate job with repository write permission. It publishes the checked bytes from that run and verifies the uploaded checksum. It does not change repository visibility or update the tap.
+
+Release notes come from non-merge commit subjects since the highest reachable version tag, excluding the current version tag. The first release includes the complete non-merge history. Each entry links to its commit. Write clear commit subjects; version changes remain explicit in `package.json`.
+
+The tap has a separate **Tap update** workflow. It downloads a public source release, verifies its checksum, generates the formula, runs an online audit, and tests source installation. With `publish=true`, it commits the checked formula to the tap. Both workflows use their own repository's `GITHUB_TOKEN`; no cross-repository token is needed.
+
+Hosted checks do not replace GUI logout/login, second-account access, Compose, or cross-version upgrade and recovery checks.
+
 ## Check the source
 
 Use Node.js 24 or later. Dependency installation uses the committed lockfile with installation scripts disabled. Build-only frontend packages stay in `devDependencies`.
@@ -46,13 +67,12 @@ The source generator reads a committed revision, not uncommitted files or local 
 
 ```sh
 npm run release:source -- --ref <commit-sha> --output release-artifacts/<version>
+node scripts/release-notes.mjs --manifest release-artifacts/<version>/manifest.json
 ```
 
 The generator uses `git archive` with an explicit file list: source, tests, build inputs, lockfile, MIT license, examples, and public instructions. It excludes plans, dependencies, local work folders, credentials, logs, test results, and caches. It builds and exercises that exact archive, then checks the production-only installation.
 
-The output directory contains `servicemon-<version>-source.tar.gz`, its SHA-256 file, and `manifest.json`. Existing archive bytes are not overwritten. Use a new output directory for a new build.
-
-The **Source archive** GitHub Actions workflow runs by manual dispatch with the same commit SHA or tag. It checks the source and uploads the `source-archive` artifact with seven-day retention. It has read-only repository permission and does not create a GitHub release. Download the artifact before it expires.
+The output directory contains `servicemon-<version>-source.tar.gz`, its SHA-256 file, `manifest.json`, and the generated `release-notes.md`. Existing archive and release-note files are not overwritten. Use a new output directory for a new build.
 
 ## Test the formula
 
@@ -87,17 +107,26 @@ The startup path-swap fixture does not replace these full Homebrew checks.
 
 ## Publish the release
 
-Create the matching `v<version>` Git tag and GitHub release. Upload the checked source archive and SHA-256 file without rebuilding them. The asset URL is:
+Publication requires explicit approval. Run the **Release** workflow with the reviewed full commit SHA and `publish=true`:
+
+```sh
+gh workflow run release.yml --repo sauravhiremath/servicemon \
+  -f ref=<full-commit-sha> -F publish=true
+```
+
+The job creates `v<version>` at the checked commit and uploads the archive, checksum, manifest, and formula. The release body contains the generated commit-based notes. An existing version tag must identify the checked commit. An existing release is not overwritten.
+
+The asset URL is:
 
 `https://github.com/sauravhiremath/servicemon/releases/download/v<version>/servicemon-<version>-source.tar.gz`
 
-Download the asset and compare its SHA-256 with the saved checksum. Regenerate the tap formula with `--url` set to that exact versioned URL. Run:
+After that release is public, check the tap update without writing it:
 
 ```sh
-brew style sauravhiremath/tap/servicemon
-brew audit --strict --online --formula sauravhiremath/tap/servicemon
-brew reinstall --build-from-source sauravhiremath/tap/servicemon
-brew test sauravhiremath/tap/servicemon
+gh workflow run tests.yml --repo sauravhiremath/homebrew-tap \
+  -f version=<version> -F publish=false
 ```
 
-Commit and push the formula update to the tap. Keep the last good archive, checksum, formula, release notes, and test results. Repair a bad release with a new version or restore a checked earlier version; never upload different bytes under an existing version.
+To approve the tap update, run the same command with `-F publish=true`. The workflow repeats its checks before committing the formula. The source repository and tap must be public for installation without GitHub credentials. Visibility changes remain a separate, explicit action.
+
+Keep the last good archive, checksum, formula, release notes, and test results. Repair a bad release with a new version or restore a checked earlier version; never upload different bytes under an existing version.

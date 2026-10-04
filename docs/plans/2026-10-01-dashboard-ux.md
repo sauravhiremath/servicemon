@@ -102,7 +102,7 @@ Update existing behavioral tests where the user contract changes. Do not preserv
 ### Task 4: Shared styling and integration
 
 **Result:** All changes form one usable dashboard with readable contrast and keyboard focus.
-**Files and symbols:** src/web/styles.css, tests/web, README.md, CHANGELOG.md, docs/operations.md.
+**Files and symbols:** src/web/styles.css, tests/web, README.md, docs/operations.md.
 **Contract:** Integrate the worker interfaces. Keep backend behavior unchanged.
 **TDD:** not applicable — user requests checks only after edits.
 **Test seam:** Complete application and isolated browser fixtures.
@@ -111,7 +111,7 @@ Update existing behavioral tests where the user contract changes. Do not preserv
 1. Add shared spacing, contrast, log colour, and focus styles.
 2. Integrate component changes and update affected behavioral tests.
 3. Run final checks and real browser scenarios.
-4. Update user documentation and changelog after smoke proof.
+4. Update user documentation after smoke proof.
    **Verification:** npm run typecheck; npm test; npm run build; npm run test:e2e; npm run smoke; isolated browser scenarios.
    **Depends on:** Tasks 1, 2, 3.
 

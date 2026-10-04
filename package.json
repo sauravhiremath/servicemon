@@ -30,7 +30,6 @@
     "docs/releasing.md",
     "CONTRIBUTING.md",
     "examples",
-    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

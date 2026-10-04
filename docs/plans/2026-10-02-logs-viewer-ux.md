@@ -420,7 +420,7 @@ Announce connection changes and user-triggered search/copy results through a sep
 
 **Result:** All changed paths work on the actual browser surface and have current operator instructions.
 
-**Files and symbols:** `tests/web/logs.spec.ts`; `tests/web/manager.ts` only if additional real-output cases are needed; `src/web/logs/log-panel.tsx`; `src/web/styles.css`; `docs/operations.md`; `CHANGELOG.md`.
+**Files and symbols:** `tests/web/logs.spec.ts`; `tests/web/manager.ts` only if additional real-output cases are needed; `src/web/logs/log-panel.tsx`; `src/web/styles.css`; `docs/operations.md`.
 
 **Contract:** Existing installed CLI browser fixtures remain the runtime verification path.
 
@@ -436,7 +436,7 @@ Announce connection changes and user-triggered search/copy results through a sep
 4. Check all stated viewport sizes and 200-percent zoom.
 5. Prevent continuous log announcements while retaining accessible output and status messages.
 6. Add regression tests only for confirmed behavior risks.
-7. Update operator instructions and the changelog after runtime proof.
+7. Update operator instructions after runtime proof.
 
 **Verification:** The commands and manual scenarios in Final verification.
 

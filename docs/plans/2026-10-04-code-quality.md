@@ -102,7 +102,7 @@ Run type checking, existing tests, and the CLI smoke scenario after normalizatio
 
 **Result:** CI invokes the local checks before build and tests.
 
-**Files and symbols:** `.github/workflows/ci.yml`, `CONTRIBUTING.md`, and `CHANGELOG.md`.
+**Files and symbols:** `.github/workflows/ci.yml` and `CONTRIBUTING.md`.
 
 **Contract:** Contributors and CI use the same commands.
 

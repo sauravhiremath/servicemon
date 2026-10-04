@@ -41,7 +41,6 @@ const top = {
   '.oxfmtrc.json': true,
   'knip.json': true,
   'README.md': true,
-  'CHANGELOG.md': true,
   LICENSE: true,
   'CONTRIBUTING.md': true,
   'tsconfig.json': true,

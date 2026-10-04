@@ -28,7 +28,7 @@ The source archive contains application source, tests, build inputs, the depende
 
 The installed package contains built application files and runtime dependencies. Frontend build packages stay in `devDependencies`; their compiled output is in the dashboard bundle. Two independently built and pruned runtime trees must match the lockfile.
 
-`package.json` supplies the CLI version. `release:check` checks versions, package contents, the MIT license, built assets, and installed dependency versions. Runtime-only mode checks the pruned dependency tree. The changelog has no required version heading.
+`package.json` supplies the CLI version. `release:check` checks versions, package contents, the MIT license, built assets, and installed dependency versions. Runtime-only mode checks the pruned dependency tree.
 
 ## Homebrew formula
 

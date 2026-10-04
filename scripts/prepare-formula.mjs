@@ -55,7 +55,7 @@ const formula = `class Servicemon < Formula
     system "npm", "prune", "--offline", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"
     system "node", "scripts/release-check.mjs", "--runtime"
     libexec.install "dist", "node_modules", "package.json", "package-lock.json",
-                    "LICENSE", "CONTRIBUTING.md", "README.md", "CHANGELOG.md"
+                    "LICENSE", "CONTRIBUTING.md", "README.md"
     libexec.install "docs", "examples"
     (libexec/"scripts").install "scripts/smoke-installed.mjs"
     (bin/"servicemon").write <<~SH

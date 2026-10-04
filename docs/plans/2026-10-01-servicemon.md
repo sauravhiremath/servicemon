@@ -205,7 +205,6 @@ tests/fixtures/
 scripts/smoke.mjs
 scripts/smoke-compose.mjs
 README.md
-CHANGELOG.md
 docs/config.md
 docs/cli.md
 docs/operations.md
@@ -981,7 +980,7 @@ Do not implement multiple partially working components before a runnable slice e
 
 **Result:** A clean packed installation supports the approved CLI, background manager, dashboard, and Compose workflow.
 
-**Files and symbols:** Package asset inclusion, `scripts/smoke.mjs`, `scripts/smoke-compose.mjs`, `README.md`, `CHANGELOG.md`, `docs/config.md`, `docs/cli.md`, `docs/operations.md`.
+**Files and symbols:** Package asset inclusion, `scripts/smoke.mjs`, `scripts/smoke-compose.mjs`, `README.md`, `docs/config.md`, `docs/cli.md`, `docs/operations.md`.
 
 **Contract:** Installable package, reproducible commands, documented config/ownership limits, and complete acceptance evidence.
 
@@ -997,8 +996,7 @@ Do not implement multiple partially working components before a runnable slice e
 4. Verify a launchd-started manager receives the expected login-shell tool paths.
 5. Document commands, fields, exit codes, log retention, failure behavior, and custom UI limits.
 6. Include generic service, task, and Compose examples without secrets or autostart.
-7. Update the changelog after successful smoke proof.
-8. Remove throwaway verification files and fixture resources created outside the permanent test fixtures.
+7. Remove throwaway verification files and fixture resources created outside the permanent test fixtures.
 
 **Verification:** Run the Final verification procedure below and record observed results against A01–A27.
 
