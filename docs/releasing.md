@@ -60,7 +60,9 @@ Generate a formula from the archive manifest:
 
 ```sh
 npm run release:formula -- --manifest release-artifacts/<version>/manifest.json --tap /path/to/homebrew-tap
+brew trust --formula sauravhiremath/tap/servicemon
 brew style sauravhiremath/tap/servicemon
+brew audit --strict --formula sauravhiremath/tap/servicemon
 brew install --build-from-source sauravhiremath/tap/servicemon
 brew test sauravhiremath/tap/servicemon
 ```

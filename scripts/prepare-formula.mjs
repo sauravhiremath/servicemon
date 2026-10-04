@@ -34,7 +34,6 @@ const formula = `class Servicemon < Formula
   desc "Control local development services with a CLI and dashboard"
   homepage "https://github.com/sauravhiremath/servicemon"
   url ${JSON.stringify(url)}
-  version ${JSON.stringify(manifest.version)}
   sha256 ${JSON.stringify(manifest.sha256)}
   license "MIT"
 

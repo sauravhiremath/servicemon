@@ -56,6 +56,10 @@ async function stop() {
       throw error;
     }
   });
+  await until(async () => {
+    const { stdout } = await exec('/bin/launchctl', ['print', `gui/${process.getuid()}/${label}`]);
+    return !/^\s*(?:pid = \d+|state = running)\s*$/m.test(stdout);
+  });
 }
 try {
   await exec('npm', ['run', 'build'], { timeout: 120000 });
