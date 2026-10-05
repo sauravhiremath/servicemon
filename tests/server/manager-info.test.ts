@@ -155,18 +155,29 @@ it('reports fixed build information, launch settings, and guarded shutdown', asy
       '/api/entries/demo%2Fapi/start',
       {},
     );
-    expect(started.body.ok).toBe(true);
+    if (!started.body.ok) {
+      throw new Error(started.body.error.message);
+    }
+    const operationId = started.body.data.operationId;
     const deadline = Date.now() + 5000;
     let snapshot: Snapshot | undefined;
     while (Date.now() < deadline) {
       const status = await envelope<Snapshot>(manager.endpoint, '/api/status');
-      if (status.body.ok && status.body.data.entries[0]?.state === 'running') {
+      if (
+        status.body.ok &&
+        status.body.data.entries[0]?.state === 'running' &&
+        status.body.data.operations.find((operation) => operation.id === operationId)?.state ===
+          'succeeded'
+      ) {
         snapshot = status.body.data;
         break;
       }
       await delay(25);
     }
     expect(snapshot?.entries[0]?.state).toBe('running');
+    expect(snapshot?.operations.find((operation) => operation.id === operationId)?.state).toBe(
+      'succeeded',
+    );
     const running = await envelope<ManagerInfo>(manager.endpoint, '/api/manager/info');
     if (!running.body.ok) {
       throw new Error(running.body.error.message);
