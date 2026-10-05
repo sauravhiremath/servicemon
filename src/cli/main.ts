@@ -24,7 +24,7 @@ const program = new Command()
   .option('--json', 'Write machine-readable JSON')
   .option('--config <path>', 'Central YAML config file')
   .exitOverride();
-program.configureOutput({ writeErr: () => {} });
+program.configureOutput({ outputError: () => {} });
 program
   .command('serve')
   .description('Start or reuse the single manager')
@@ -106,8 +106,8 @@ try {
   await program.parseAsync();
 } catch (error) {
   if (error instanceof CommanderError) {
-    if (error.exitCode === 0) {
-      process.exitCode = 0;
+    if (error.exitCode === 0 || error.code === 'commander.help') {
+      process.exitCode = error.exitCode;
     } else {
       printError(new AppError('INVALID_INPUT', error.message), process.argv.includes('--json'));
     }

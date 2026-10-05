@@ -83,7 +83,7 @@ Logs with `--json` use newline-delimited JSON records, not the normal response e
 | Exit | Meaning                                                                                     |
 | ---- | ------------------------------------------------------------------------------------------- |
 | 0    | Success, or accepted no-wait operation                                                      |
-| 1    | Failed command/operation or other error                                                     |
+| 1    | Failed command/operation, missing command/subcommand, or other error                        |
 | 2    | Invalid config/input/target, missing config, or unknown entry                               |
 | 3    | Manager, Docker, or required tool unavailable                                               |
 | 4    | Readiness timeout                                                                           |
