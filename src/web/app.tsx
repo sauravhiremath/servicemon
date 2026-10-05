@@ -7,7 +7,16 @@ import {
   SearchIcon,
   SettingsIcon,
 } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useGroupRef, type Layout, type LayoutChangedMeta } from 'react-resizable-panels';
 import type {
   Action,
@@ -50,9 +59,15 @@ import {
 } from './components/select.js';
 import { TooltipProvider } from './components/tooltip.js';
 import { commandLabel, displayHealth, entryLabel, HEALTH_LABEL, STATE_LABEL } from './labels.js';
-import { LogPanel, type LogTab, type LogViewState } from './logs/log-panel.js';
+import type { LogTab, LogViewState } from './logs/log-panel.js';
 import { appendLive, HISTORY_TAIL, joinHistory, rememberLive } from './logs/retain.js';
 import { ServiceTable, type ServiceRow } from './table/service-table.js';
+
+const LogPanel = lazy(async () => {
+  // A static import would load the log viewer before the user opens it.
+  const module = await import('./logs/log-panel.js');
+  return { default: module.LogPanel };
+});
 
 type Connection = 'loading' | 'connected' | 'disconnected';
 type TargetKind = 'projects' | 'compose-groups';
@@ -661,29 +676,37 @@ export function App() {
                   defaultSize={`${logPercent}%`}
                   className="min-h-0"
                 >
-                  <LogPanel
-                    tabs={tabs}
-                    activeId={activeId}
-                    entries={entries}
-                    projectNames={projectNames}
-                    eventState={eventState}
-                    onOpenEntry={(id) => void openLogs(id)}
-                    expanded={logsExpanded}
-                    onExpand={onExpandLogs}
-                    onSelect={setActiveId}
-                    onClose={(id) => {
-                      const next = tabs.filter((tab) => tab.entryId !== id);
-                      setTabs(next);
-                      if (activeId === id) {
-                        setActiveId(next[0]?.entryId ?? null);
-                      }
-                      if (next.length === 0) {
-                        hideLogs();
-                      }
-                    }}
-                    onHide={hideLogs}
-                    onViewChange={updateLogView}
-                  />
+                  <Suspense
+                    fallback={
+                      <div role="status" className="p-4 text-sm text-muted-foreground">
+                        Loading logs…
+                      </div>
+                    }
+                  >
+                    <LogPanel
+                      tabs={tabs}
+                      activeId={activeId}
+                      entries={entries}
+                      projectNames={projectNames}
+                      eventState={eventState}
+                      onOpenEntry={(id) => void openLogs(id)}
+                      expanded={logsExpanded}
+                      onExpand={onExpandLogs}
+                      onSelect={setActiveId}
+                      onClose={(id) => {
+                        const next = tabs.filter((tab) => tab.entryId !== id);
+                        setTabs(next);
+                        if (activeId === id) {
+                          setActiveId(next[0]?.entryId ?? null);
+                        }
+                        if (next.length === 0) {
+                          hideLogs();
+                        }
+                      }}
+                      onHide={hideLogs}
+                      onViewChange={updateLogView}
+                    />
+                  </Suspense>
                 </ResizablePanel>
               ) : null}
             </ResizablePanelGroup>
