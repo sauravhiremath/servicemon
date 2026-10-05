@@ -98,7 +98,7 @@ The formula downloads locked packages with scripts disabled, builds the applicat
 Use a clean OS account or disposable macOS machine, not normal working services:
 
 1. Confirm that config, state, manager, and login registration do not exist. Install from source and confirm they remain absent.
-2. Follow README first use through the formula launcher. Put an unrelated Node first in `PATH`. Validate config, open an owner browser link, start/stop a service, run a task, read logs, and reload config.
+2. Follow README first use through the formula launcher. Put an unrelated Node first in `PATH`. Validate config, open the plain dashboard URL, start/stop a service, run a task, read logs, and reload config.
 3. Enable isolated startup twice and confirm the manager PID is unchanged. A changed live registration must fail without stopping the manager.
 4. Stop explicitly. Upgrade the package and Node targets. Remove old fixture paths. Start the isolated LaunchAgent and verify the new task result.
 5. Check retained config/logs. Compose containers and volumes must remain after manager stop.

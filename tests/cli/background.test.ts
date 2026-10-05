@@ -16,7 +16,7 @@ await delay(250);
 const startedAt = execFileSync('/bin/ps', ['-p', String(process.pid), '-o', 'lstart='], { encoding: 'utf8' }).trim();
 const config = process.argv[process.argv.indexOf('--config') + 1];
 await writeFile(process.env.SERVICEMON_STATE_DIR + '/instance.json', JSON.stringify({
-  configPath: config, endpoint: 'http://127.0.0.1:4242', pid: process.pid, startedAt, token: 'new', credentials: 'new-credentials',
+  configPath: config, endpoint: 'http://127.0.0.1:4242', pid: process.pid, startedAt, token: 'new',
 }));
 setInterval(() => {}, 1000);
 `;
@@ -44,7 +44,6 @@ it('does not report a dead manager endpoint while the replacement is still start
         pid: 2_147_483_646,
         startedAt: 'dead',
         token: 'old',
-        credentials: 'old',
       }),
     );
     await expect(startBackground({ config, state }, command)).resolves.toBe(
@@ -121,7 +120,6 @@ it('reuses a live manager and does not signal a manager for another config', asy
         pid: sleeper.pid,
         startedAt: identity.startedAt,
         token: 'live',
-        credentials: 'live',
       }),
     );
     await expect(startBackground({ config, state }, command)).resolves.toBe(

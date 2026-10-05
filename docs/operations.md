@@ -102,7 +102,7 @@ servicemon serve --background
 servicemon dashboard
 ```
 
-Manager stop ends owned processes and tasks. Compose containers and volumes remain running. A running old manager is not upgraded by replacing files. For an old startup registration, use this explicit migration instead:
+Manager stop ends owned processes and tasks. Compose containers and volumes remain running. A running old manager is not upgraded by replacing files. `servicemon --version` reports the installed CLI version, not the running manager version. Stop the manager before upgrading, then start it with the installed command. For an old startup registration, use this explicit migration instead:
 
 ```sh
 servicemon manager stop
