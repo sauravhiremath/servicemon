@@ -45,6 +45,40 @@ try {
       .status,
     403,
   );
+  const cliVersion = (await exec(cli, ['--version'], { env, timeout: 20000 })).stdout.trim();
+  let info;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const infoResponse = await fetch(endpoint + '/api/manager/info');
+    assert.equal(infoResponse.status, 200);
+    const body = await infoResponse.json();
+    assert.equal(body.ok, true, JSON.stringify(body.error));
+    info = body.data;
+    if (info.startup.state !== 'running') {
+      break;
+    }
+    await delay(50);
+  }
+  assert.equal(info.startup.state, 'succeeded', JSON.stringify(info.startup));
+  assert.equal(info.managementVersion, 1);
+  assert.equal(info.version, cliVersion);
+  assert.equal(Number.isInteger(info.applicationProtocol), true);
+  assert.equal(info.endpoint, endpoint);
+  assert.equal(info.launchSettings.port, Number(new URL(endpoint).port));
+  assert.equal(info.launchSettings.ui, null);
+  assert.equal(typeof info.pid, 'number');
+  assert.equal(typeof info.startedAt, 'string');
+  assert.equal(typeof info.impact?.impactKey, 'string');
+  assert.equal(info.impact.impactKey.length > 0, true);
+  const manager = await json('manager', 'status');
+  assert.equal(manager.running, true);
+  assert.equal(manager.cliVersion, cliVersion);
+  assert.equal(manager.managerVersion, cliVersion);
+  assert.equal(manager.applicationProtocol, info.applicationProtocol);
+  assert.equal(manager.compatible, true);
+  assert.equal(manager.restartRequired, false);
+  assert.equal(manager.pid, info.pid);
+  assert.equal(manager.endpoint, endpoint);
+  assert.equal(manager.configPath, config);
   await json('start', 'demo/worker');
   assert.equal((await json('status', 'demo/worker')).entries[0].state, 'running');
   await json('run', 'demo/probe');
@@ -58,7 +92,7 @@ try {
   await json('stop', 'demo/worker');
   assert.equal((await json('status', 'demo/worker')).entries[0].state, 'stopped');
   console.log(
-    'PASS installed CLI: validate, plain dashboard/assets, foreign-origin denial, service, task, logs, reload, stop',
+    'PASS installed CLI: validate, plain dashboard/assets, foreign-origin denial, manager build information, service, task, logs, reload, stop',
   );
 } catch (error) {
   failures.push(error);

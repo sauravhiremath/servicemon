@@ -4,11 +4,19 @@ import { proposedEdit, commitConfig } from '../config/document.js';
 import { loadCandidate, applyCandidate } from '../config/reload.js';
 import { LogStore } from '../logs/store.js';
 import { ProcessAdapter } from '../process/runner.js';
+import { assetRoot } from '../server/assets.js';
 import { EventHub } from '../server/events.js';
 import { startServer } from '../server/server.js';
 import type { ControlServer } from '../server/server.js';
+import { applicationProtocol, packageVersion } from '../shared/build-info.js';
 import { errorData } from '../shared/errors.js';
-import type { ErrorData, Operation, Snapshot } from '../shared/types.js';
+import type {
+  ErrorData,
+  ManagerInfo,
+  Operation,
+  ShutdownExpectation,
+  Snapshot,
+} from '../shared/types.js';
 import { HealthMonitor } from './health.js';
 import { acquireInstance, writeInstance } from './instance.js';
 import { Operations } from './operations.js';
@@ -32,6 +40,8 @@ export async function startManager(options: ManagerOptions): Promise<string> {
     compose: ComposeAdapter | undefined,
     health: HealthMonitor | undefined;
   let reloadError: ErrorData | undefined, shutdownPromise: Promise<void> | undefined;
+  let uiPath: string | null = null;
+  let boundPort = 0;
   const subscriptions = new Map<string, () => void>();
   const snapshot = (): Snapshot => ({
     projects: operations!.config.projects,
@@ -110,6 +120,7 @@ export async function startManager(options: ManagerOptions): Promise<string> {
     });
   };
   try {
+    uiPath = options.ui ? (await assetRoot(options.ui)).index : null;
     const candidate = await loadCandidate(options.config);
     logs = new LogStore(options.state, candidate.config.logs);
     health = new HealthMonitor(candidate.environment, changed);
@@ -132,6 +143,7 @@ export async function startManager(options: ManagerOptions): Promise<string> {
       { process: processAdapter, compose },
       health,
       changed,
+      { pid: lock.record.pid, startedAt: lock.record.startedAt },
     );
     await processAdapter.recover();
     await compose.refresh();
@@ -162,6 +174,19 @@ export async function startManager(options: ManagerOptions): Promise<string> {
           throw error;
         }
       });
+    const info = (): ManagerInfo => ({
+      managementVersion: 1,
+      version: packageVersion,
+      applicationProtocol,
+      pid: lock.record.pid,
+      startedAt: lock.record.startedAt,
+      configPath: lock.record.configPath,
+      endpoint: server?.endpoint ?? '',
+      launchSettings: { port: boundPort, ui: uiPath },
+      startup: operations!.startupStatus(),
+      shutdown: operations!.shutdownStatus(),
+      impact: operations!.impact(),
+    });
     server = await startServer({
       operations,
       history: async (id, query) =>
@@ -174,13 +199,35 @@ export async function startManager(options: ManagerOptions): Promise<string> {
       reload: () => reload(),
       edit: reload,
       shutdown,
+      admitShutdown: (expected?: ShutdownExpectation) => operations!.admitShutdown(expected),
+      info,
       reloadError: () => reloadError,
     });
-    await writeInstance(options.state, { ...lock.record, endpoint: server.endpoint });
+    boundPort = Number(new URL(server.endpoint).port);
+    const environmentCapture = lock.record.metadata.launchSettings.environmentCapture;
+    await writeInstance(options.state, {
+      ...lock.record,
+      endpoint: server.endpoint,
+      metadata: {
+        version: packageVersion,
+        applicationProtocol,
+        launchSettings: {
+          ui: uiPath,
+          port: boundPort,
+          ...(environmentCapture ? { environmentCapture } : {}),
+        },
+      },
+    });
     process.on('SIGTERM', signal);
     process.on('SIGINT', signal);
     void operations
       .autostart()
+      .then(() => {
+        const startup = operations?.startupStatus();
+        if (startup?.state === 'failed') {
+          console.error(startup.error?.message ?? 'Autostart failed.');
+        }
+      })
       .catch((error) => console.error(error instanceof Error ? error.message : String(error)));
     return server.endpoint;
   } catch (error) {

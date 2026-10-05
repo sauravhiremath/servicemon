@@ -47,6 +47,7 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:compose": "node scripts/smoke-compose.mjs",
     "smoke:startup": "node scripts/smoke-startup.mjs",
+    "smoke:update": "node scripts/smoke-update.mjs",
     "check:runtime": "node scripts/check-runtime.mjs",
     "release:formula": "node scripts/prepare-formula.mjs",
     "release:check": "node scripts/release-check.mjs",

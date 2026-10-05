@@ -6,7 +6,7 @@ import { configPath, stateDirectory } from '../config/paths.js';
 import { validateGraphs } from '../manager/graphs.js';
 import { readInstance } from '../manager/instance.js';
 import { AppError } from '../shared/errors.js';
-import { observeOperation, request } from './client.js';
+import type { ManagerClient } from './client.js';
 import { printResult } from './output.js';
 
 async function validateDefinitions(source: string, path: string) {
@@ -90,7 +90,7 @@ function flags(kind: string, options: Record<string, any>): Record<string, unkno
   }
   return fields;
 }
-export function addDefinitionCommands(program: Command): void {
+export function addDefinitionCommands(program: Command, client: ManagerClient): void {
   const configuration = program.command('config').description('Inspect and validate central YAML');
   configuration
     .command('path')
@@ -207,8 +207,8 @@ export function addDefinitionCommands(program: Command): void {
               requested: path,
             });
           }
-          const accepted = await request<{ operationId: string }>('/api/config/edit', edit);
-          printResult(await observeOperation(accepted.operationId), Boolean(global.json));
+          const accepted = await client.request<{ operationId: string }>('/api/config/edit', edit);
+          printResult(await client.observeOperation(accepted.operationId), Boolean(global.json));
         } else {
           const result = await editConfig(path, edit, (source) =>
             validateDefinitions(source, path),

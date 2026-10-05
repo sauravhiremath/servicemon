@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { Command, CommanderError } from 'commander';
 import { configPath, stateDirectory } from '../config/paths.js';
@@ -8,19 +7,25 @@ import { readInstance } from '../manager/instance.js';
 import { enableStartup, disableStartup } from '../manager/launch-agent.js';
 import { startManager } from '../manager/runtime.js';
 import { assetRoot } from '../server/assets.js';
+import { packageVersion } from '../shared/build-info.js';
 import { AppError } from '../shared/errors.js';
 import { addRuntimeCommands } from './actions.js';
 import { startBackground } from './background.js';
-import { request } from './client.js';
 import { addDefinitionCommands } from './definitions.js';
+import {
+  commandIsTerminal,
+  createCommandClient,
+  managerStatus,
+  managerStop,
+  restartManager,
+} from './manager.js';
 import { printError, printResult } from './output.js';
 
-const version = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
-  .version as string;
+const client = createCommandClient({ terminal: commandIsTerminal() });
 const program = new Command()
   .name('servicemon')
   .description('Control local development services')
-  .version(version)
+  .version(packageVersion)
   .option('--json', 'Write machine-readable JSON')
   .option('--config <path>', 'Central YAML config file')
   .exitOverride();
@@ -51,7 +56,7 @@ program
   .command('dashboard')
   .description('Open the dashboard in your browser and print its URL')
   .action(async (options, command) => {
-    await request('/api/status');
+    await client.request('/api/status');
     const record = await readInstance(stateDirectory());
     if (!record) {
       throw new AppError('MANAGER_UNAVAILABLE', 'No manager is running.');
@@ -66,20 +71,30 @@ program
       console.error('Could not open the browser. Open the printed URL manually.');
     }
   });
-const manager = program.command('manager').description('Inspect or stop the background manager');
+const manager = program
+  .command('manager')
+  .description('Inspect, restart, or stop the background manager');
 manager.command('status').action(async (options, command) => {
-  await request('/api/status');
-  const record = await readInstance(stateDirectory());
-  printResult(
-    { running: true, endpoint: record!.endpoint, configPath: record!.configPath, pid: record!.pid },
-    Boolean(command.optsWithGlobals().json),
-  );
+  printResult(await managerStatus(), Boolean(command.optsWithGlobals().json));
 });
 manager
   .command('stop')
   .action(async (options, command) =>
-    printResult(await request('/api/manager/stop', {}), Boolean(command.optsWithGlobals().json)),
+    printResult(await managerStop(), Boolean(command.optsWithGlobals().json)),
   );
+manager
+  .command('restart')
+  .description('Replace the running manager after one confirmation')
+  .option('--yes', 'Restart without a prompt')
+  .action(async (options, command) => {
+    const global = command.optsWithGlobals();
+    const outcome = await restartManager({
+      yes: options.yes === true,
+      terminal: commandIsTerminal(),
+      explicitConfig: typeof global.config === 'string' ? global.config : undefined,
+    });
+    printResult(outcome.report, Boolean(global.json));
+  });
 const startup = program.command('startup').description('Manage optional macOS login startup');
 startup
   .command('enable')
@@ -94,8 +109,8 @@ startup
   .action(async (options, command) =>
     printResult(await disableStartup(stateDirectory()), Boolean(command.optsWithGlobals().json)),
   );
-addRuntimeCommands(program);
-addDefinitionCommands(program);
+addRuntimeCommands(program, client);
+addDefinitionCommands(program, client);
 try {
   if (Number(process.versions.node.split('.')[0]) < 24) {
     throw new AppError(

@@ -4,7 +4,10 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import { ownStartedAt, processIdentity } from '../config/process-identity.js';
+import { applicationProtocol, packageVersion } from '../shared/build-info.js';
 import { AppError } from '../shared/errors.js';
+import type { InstanceMetadata } from '../shared/types.js';
+import { environmentCaptureSelectors } from './environment.js';
 
 const lockSchema = z.object({
   pid: z.number(),
@@ -12,12 +15,28 @@ const lockSchema = z.object({
   token: z.string(),
   configPath: z.string(),
 });
+const environmentCaptureSchema = z
+  .strictObject({
+    loginShell: z.string().min(1).optional(),
+    timeoutMs: z.number().int().positive().optional(),
+  })
+  .refine((value) => value.loginShell !== undefined || value.timeoutMs !== undefined);
+const metadataSchema: z.ZodType<InstanceMetadata> = z.strictObject({
+  version: z.string().min(1),
+  applicationProtocol: z.number().int().positive(),
+  launchSettings: z.strictObject({
+    ui: z.union([z.string().refine((value) => path.isAbsolute(value)), z.null()]),
+    port: z.number().int().min(0).max(65535),
+    environmentCapture: environmentCaptureSchema.optional(),
+  }),
+});
 const instanceSchema = z.object({
   configPath: z.string(),
   endpoint: z.string(),
   pid: z.number(),
   startedAt: z.string(),
   token: z.string(),
+  metadata: metadataSchema,
 });
 
 export type InstanceRecord = z.infer<typeof instanceSchema>;
@@ -103,7 +122,11 @@ async function releaseOwned(stateDir: string, token: string): Promise<void> {
   await rm(lockPath(stateDir), { force: true });
 }
 
-export async function acquireInstance(stateDir: string, configPath: string): Promise<InstanceLock> {
+export async function acquireInstance(
+  stateDir: string,
+  configPath: string,
+  metadata: InstanceMetadata = currentMetadata(),
+): Promise<InstanceLock> {
   const absoluteConfig = path.resolve(configPath);
   await mkdir(stateDir, { recursive: true, mode: 0o700 });
   await chmod(stateDir, 0o700);
@@ -120,6 +143,7 @@ export async function acquireInstance(stateDir: string, configPath: string): Pro
         pid: process.pid,
         startedAt,
         token,
+        metadata,
       };
       try {
         await handle.writeFile(
@@ -176,4 +200,36 @@ export async function acquireInstance(stateDir: string, configPath: string): Pro
     }
   }
   throw new AppError('MANAGER_CONFLICT', 'Could not acquire the manager lock.');
+}
+export async function readLock(
+  stateDir: string,
+): Promise<{ pid: number; startedAt: string; configPath: string } | undefined> {
+  const value = await readJson(lockPath(stateDir));
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = lockSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new AppError(
+      'MANAGER_CONFLICT',
+      'Manager lock is unreadable. No replacement was launched.',
+    );
+  }
+  return {
+    pid: parsed.data.pid,
+    startedAt: parsed.data.startedAt,
+    configPath: parsed.data.configPath,
+  };
+}
+function currentMetadata(): InstanceMetadata {
+  const environmentCapture = environmentCaptureSelectors();
+  return {
+    version: packageVersion,
+    applicationProtocol,
+    launchSettings: {
+      ui: null,
+      port: 0,
+      ...(environmentCapture ? { environmentCapture } : {}),
+    },
+  };
 }

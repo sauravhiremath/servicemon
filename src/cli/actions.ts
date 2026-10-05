@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { Command } from 'commander';
 import { AppError } from '../shared/errors.js';
 import type { EntryStatus, LogHistory, Snapshot, Target } from '../shared/types.js';
-import { observeOperation, request } from './client.js';
+import type { ManagerClient } from './client.js';
 import { printResult } from './output.js';
 
 function selectedTarget(
@@ -29,7 +29,7 @@ function statusRows(entries: EntryStatus[]): string {
     )
     .join('\n');
 }
-export function addRuntimeCommands(program: Command): void {
+export function addRuntimeCommands(program: Command, client: ManagerClient): void {
   for (const action of ['start', 'stop', 'restart', 'run'] as const) {
     const command = program
       .command(`${action} [target]`)
@@ -49,13 +49,13 @@ export function addRuntimeCommands(program: Command): void {
         : target.project
           ? `/api/projects/${encodeURIComponent(target.project)}/actions`
           : `/api/compose-groups/${encodeURIComponent(target.compose!)}/actions`;
-      const accepted = await request<{ operationId: string }>(
+      const accepted = await client.request<{ operationId: string }>(
         route,
         target.entry ? {} : { action },
       );
       const json = Boolean(command.optsWithGlobals().json);
       printResult(
-        options.wait === false ? accepted : await observeOperation(accepted.operationId),
+        options.wait === false ? accepted : await client.observeOperation(accepted.operationId),
         json,
       );
     });
@@ -66,7 +66,7 @@ export function addRuntimeCommands(program: Command): void {
     .option('--project <id>', 'Project ID')
     .option('--compose <id>', 'Compose group ID')
     .action(async (id, options, command) => {
-      const snapshot = await request<Snapshot>('/api/status');
+      const snapshot = await client.request<Snapshot>('/api/status');
       const target =
         id || options.project || options.compose ? selectedTarget(id, options) : undefined;
       const entries = snapshot.entries.filter(
@@ -91,7 +91,7 @@ export function addRuntimeCommands(program: Command): void {
     .description('Show a requested operation and its result')
     .action(async (id, options, command) =>
       printResult(
-        await request('/api/operations/' + encodeURIComponent(id)),
+        await client.request('/api/operations/' + encodeURIComponent(id), undefined, 'observe'),
         Boolean(command.optsWithGlobals().json),
       ),
     );
@@ -100,9 +100,9 @@ export function addRuntimeCommands(program: Command): void {
     .description('Validate and apply the config without autostart')
     .option('--no-wait', 'Return operation ID after acceptance')
     .action(async (options, command) => {
-      const result = await request<{ operationId: string }>('/api/config/reload', {});
+      const result = await client.request<{ operationId: string }>('/api/config/reload', {});
       printResult(
-        options.wait === false ? result : await observeOperation(result.operationId),
+        options.wait === false ? result : await client.observeOperation(result.operationId),
         Boolean(command.optsWithGlobals().json),
       );
     });
@@ -125,7 +125,7 @@ export function addRuntimeCommands(program: Command): void {
       process.once('SIGTERM', stop);
       try {
         do {
-          const history = await request<LogHistory>(
+          const history = await client.request<LogHistory>(
             `/api/entries/${encodeURIComponent(id)}/logs?${cursor === undefined ? 'tail=' + options.tail : 'after=' + cursor}`,
           );
           if (history.error) {

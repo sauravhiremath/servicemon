@@ -17,6 +17,7 @@ const startedAt = execFileSync('/bin/ps', ['-p', String(process.pid), '-o', 'lst
 const config = process.argv[process.argv.indexOf('--config') + 1];
 await writeFile(process.env.SERVICEMON_STATE_DIR + '/instance.json', JSON.stringify({
   configPath: config, endpoint: 'http://127.0.0.1:4242', pid: process.pid, startedAt, token: 'new',
+  metadata: { version: '0.1.2', applicationProtocol: 1, launchSettings: { ui: null, port: 4242 } },
 }));
 setInterval(() => {}, 1000);
 `;
@@ -44,6 +45,11 @@ it('does not report a dead manager endpoint while the replacement is still start
         pid: 2_147_483_646,
         startedAt: 'dead',
         token: 'old',
+        metadata: {
+          version: '0.1.2',
+          applicationProtocol: 1,
+          launchSettings: { ui: null, port: 9 },
+        },
       }),
     );
     await expect(startBackground({ config, state }, command)).resolves.toBe(
@@ -120,6 +126,11 @@ it('reuses a live manager and does not signal a manager for another config', asy
         pid: sleeper.pid,
         startedAt: identity.startedAt,
         token: 'live',
+        metadata: {
+          version: '0.1.2',
+          applicationProtocol: 1,
+          launchSettings: { ui: null, port: 7331 },
+        },
       }),
     );
     await expect(startBackground({ config, state }, command)).resolves.toBe(
@@ -128,8 +139,73 @@ it('reuses a live manager and does not signal a manager for another config', asy
     await expect(
       startBackground({ config: path.join(directory, 'other.yaml'), state }, command),
     ).rejects.toMatchObject({ code: 'MANAGER_CONFLICT' });
+    await expect(
+      startBackground(
+        { config, state, replace: { pid: 2_147_483_646, startedAt: 'old-manager' } },
+        command,
+      ),
+    ).rejects.toMatchObject({ code: 'MANAGER_CONFLICT' });
     expect(process.kill(sleeper.pid, 0)).toBe(true);
   } finally {
+    sleeper.kill('SIGTERM');
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it('does not report the previous manager endpoint as replacement success', async () => {
+  const { directory, state, config } = await fixture();
+  const command = path.join(directory, 'publish.mjs');
+  const sleeper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+    stdio: 'ignore',
+  });
+  let replacement: number | undefined;
+  try {
+    const identity = await processIdentity(sleeper.pid ?? 0);
+    if (identity.state !== 'alive' || sleeper.pid === undefined) {
+      throw new Error('Sleeper did not stay alive.');
+    }
+    await writeFile(command, publisher);
+    await writeFile(
+      path.join(state, 'instance.json'),
+      JSON.stringify({
+        configPath: config,
+        endpoint: 'http://127.0.0.1:7331',
+        pid: sleeper.pid,
+        startedAt: identity.startedAt,
+        token: 'old',
+        metadata: {
+          version: '0.1.2',
+          applicationProtocol: 1,
+          launchSettings: { ui: null, port: 7331 },
+        },
+      }),
+    );
+    await expect(
+      startBackground(
+        { config, state, replace: { pid: sleeper.pid, startedAt: identity.startedAt } },
+        command,
+      ),
+    ).resolves.toBe('http://127.0.0.1:4242');
+    const parsed: unknown = JSON.parse(await readFile(path.join(state, 'instance.json'), 'utf8'));
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      !('pid' in parsed) ||
+      typeof parsed.pid !== 'number'
+    ) {
+      throw new Error('Replacement did not publish a pid.');
+    }
+    replacement = parsed.pid;
+    expect(replacement).not.toBe(sleeper.pid);
+    expect(process.kill(sleeper.pid, 0)).toBe(true);
+  } finally {
+    if (replacement !== undefined) {
+      try {
+        process.kill(replacement, 'SIGTERM');
+      } catch {
+        /* already exited */
+      }
+    }
     sleeper.kill('SIGTERM');
     await rm(directory, { recursive: true, force: true });
   }

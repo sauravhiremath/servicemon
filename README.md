@@ -23,16 +23,6 @@ brew install sauravhiremath/tap/servicemon
 
 Installation does not create config, start the manager, or enable login startup.
 
-To build from an existing source checkout, run these commands from its root:
-
-```sh
-npm ci --ignore-scripts
-npm run build
-node dist/cli/main.js --help
-```
-
-For source builds, replace `servicemon` in the commands below with `node dist/cli/main.js`. Building does not update an installed `servicemon` command. New contributors should follow [Build from source](CONTRIBUTING.md#build-from-source) and [Run locally](CONTRIBUTING.md#run-locally) for setup and a test that does not use their normal services.
-
 ## Agent skill (optional)
 
 Install the [Servicemon skill](skills/servicemon/SKILL.md) to help your coding agent set up projects, control services, and read logs:
@@ -88,7 +78,7 @@ See the [config reference](docs/config.md), [CLI reference](docs/cli.md), and [d
 
 ## Support and maintenance
 
-For upgrades, login startup, removal, and recovery, follow the [operations guide](docs/operations.md). Stop the manager before you upgrade or uninstall. Removing the program does not remove your config, retained logs, or Compose volumes.
+For upgrades, login startup, removal, and recovery, follow the [operations guide](docs/operations.md). Removing the program does not remove your config, retained logs, or Compose volumes.
 
 Config commands and custom HTML are trusted local code. Status output, config, shell diagnostics, and logs can contain private data. Read [CONTRIBUTING.md](CONTRIBUTING.md) before reporting a defect.
 

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppError, errorData } from '../shared/errors.js';
 import type {
@@ -7,7 +7,11 @@ import type {
   CompiledConfig,
   Entry,
   EntryStatus,
+  ErrorData,
+  ManagerImpact,
   Operation,
+  ShutdownExpectation,
+  StartupState,
   Target,
 } from '../shared/types.js';
 import { topologicalOrder, validateGraphs } from './graphs.js';
@@ -20,6 +24,9 @@ export class Operations {
   private graphs: ValidatedGraphs;
   private stopping = false;
   private completedTasks = new Set<string>();
+  private startupState: StartupState = { state: 'running' };
+  private admitted?: ShutdownExpectation | 'open';
+  private shutdownTask?: Promise<void>;
   constructor(
     public config: CompiledConfig,
     public environment: NodeJS.ProcessEnv,
@@ -29,6 +36,7 @@ export class Operations {
     },
     private health: HealthMonitor,
     private changed: (operation?: Operation) => void,
+    private identity?: { pid: number; startedAt: string },
   ) {
     this.graphs = validateGraphs(config.entries);
   }
@@ -86,6 +94,9 @@ export class Operations {
         }
         for (const id of entry.dependsOn) {
           await start(this.config.entries.find((item) => item.id === id)!);
+        }
+        if (this.stopping) {
+          throw new AppError('MANAGER_STOPPING', 'Manager is stopping.');
         }
         if (entry.kind === 'task' && this.completedTasks.has(entry.id) && !forceTask) {
           done.add(entry.id);
@@ -269,19 +280,6 @@ export class Operations {
     }
     return operation;
   }
-  async autostart(): Promise<void> {
-    const entries = this.config.entries.filter((e) => e.autostart);
-    if (!entries.length) {
-      return;
-    }
-    for (const entry of entries) {
-      if (entry.kind === 'task' && this.completedTasks.has(entry.id)) {
-        continue;
-      }
-      const operation = this.submit(entry.kind === 'task' ? 'run' : 'start', { entry: entry.id });
-      await this.wait(operation.id);
-    }
-  }
   applyConfig(config: CompiledConfig, environment: NodeJS.ProcessEnv): void {
     const old = new Map(this.config.entries.map((e) => [e.id, e]));
     const invalid = new Set<string>();
@@ -357,8 +355,106 @@ export class Operations {
       }
     }
   }
-  async shutdown(): Promise<void> {
+  async autostart(): Promise<void> {
+    this.startupState = { state: 'running' };
+    let failure: ErrorData | undefined;
+    try {
+      const entries = this.config.entries.filter((e) => e.autostart);
+      for (const entry of entries) {
+        if (entry.kind === 'task' && this.completedTasks.has(entry.id)) {
+          continue;
+        }
+        const operation = this.submit(entry.kind === 'task' ? 'run' : 'start', { entry: entry.id });
+        const result = await this.wait(operation.id);
+        if (result.state === 'failed' && result.error && !failure) {
+          failure = result.error;
+        }
+      }
+      this.startupState = failure ? { state: 'failed', error: failure } : { state: 'succeeded' };
+    } catch (error) {
+      this.startupState = { state: 'failed', error: errorData(error) };
+      throw error;
+    }
+  }
+  startupStatus(): StartupState {
+    return this.startupState.error
+      ? { state: this.startupState.state, error: this.startupState.error }
+      : { state: this.startupState.state };
+  }
+  shutdownStatus(): { state: 'idle' | 'stopping' } {
+    return { state: this.stopping ? 'stopping' : 'idle' };
+  }
+  impact(): ManagerImpact {
+    const processEntryIds: string[] = [];
+    const taskIds: string[] = [];
+    for (const entry of this.config.entries) {
+      if (entry.kind === 'compose') {
+        continue;
+      }
+      const state = this.adapters.process.status(entry.id).state;
+      if (!['starting', 'running', 'stopping'].includes(state)) {
+        continue;
+      }
+      if (entry.kind === 'task') {
+        taskIds.push(entry.id);
+      } else {
+        processEntryIds.push(entry.id);
+      }
+    }
+    processEntryIds.sort();
+    taskIds.sort();
+    const operation = this.active ? { id: this.active.id, action: this.active.action } : null;
+    const impactKey = createHash('sha256')
+      .update(
+        JSON.stringify({
+          processEntryIds,
+          taskIds,
+          operation,
+          configPath: this.config.path,
+          configSource: this.config.source,
+        }),
+      )
+      .digest('hex');
+    return { processEntryIds, taskIds, operation, impactKey };
+  }
+  admitShutdown(expected?: ShutdownExpectation): void {
+    if (this.stopping) {
+      if (
+        !expected ||
+        (this.admitted &&
+          this.admitted !== 'open' &&
+          this.admitted.pid === expected.pid &&
+          this.admitted.startedAt === expected.startedAt &&
+          this.admitted.impactKey === expected.impactKey)
+      ) {
+        return;
+      }
+      throw new AppError('MANAGER_CONFLICT', 'Shutdown is already in progress.');
+    }
+    if (expected) {
+      if (
+        !this.identity ||
+        expected.pid !== this.identity.pid ||
+        expected.startedAt !== this.identity.startedAt
+      ) {
+        throw new AppError(
+          'MANAGER_CONFLICT',
+          'Manager identity changed. No process was signalled.',
+        );
+      }
+      if (expected.impactKey !== this.impact().impactKey) {
+        throw new AppError('MANAGER_CONFLICT', 'Restart impact changed. No process was signalled.');
+      }
+    }
     this.stopping = true;
+    this.admitted = expected ?? 'open';
+  }
+  async shutdown(): Promise<void> {
+    this.admitShutdown();
+    this.shutdownTask ??= this.stopOwned();
+    await this.shutdownTask;
+  }
+  private async stopOwned(): Promise<void> {
     await this.health.shutdown();
     try {
       await this.adapters.process.shutdown();

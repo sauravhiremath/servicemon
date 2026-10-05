@@ -23,9 +23,7 @@ Click a value in Cmd / Compose file to copy its full text, including text hidden
 Project and Compose group actions appear beside their groups. Group Stop actions require confirmation. Entry Stop does not add a confirmation step. Settings contains Copy config path and Reload config. The existing stop-and-apply prompt remains available when reload requires it.
 Entry controls appear in this order: Start, Run, or Stop; Restart when a service or Compose entry is running; Logs. Tasks and entries that are not running do not show Restart. Restart is disabled while an operation is in progress. Project and Compose group Actions menus retain Start, Stop, and Restart.
 
-Select Logs to open retained output. Use Find to highlight text or Filter to hide non-matching records. Copy logs copies all displayed records, not only the viewport. Maximize hides the table; Restore returns to the saved split. Scroll up to pause Follow latest. Go to latest resumes it. See Logs below for keyboard controls, history notices, and per-tab settings.
-
-Ordinary stderr output uses the normal log colour. Explicit error and warning labels use separate colours. History gaps and retention notices remain visible. A log search does not fetch records that are no longer retained.
+Select Logs to open retained output. The log controls and retention rules are described below.
 
 ## Failures
 
@@ -68,11 +66,11 @@ Log messages use 13px monospace text and a 20px line height. Wrap lines indents 
 
 `startup enable` creates a per-user LaunchAgent and starts the manager. There is no crash-restart policy. Repeated enable preserves an unchanged live manager. If the registered manager is stopped, enable starts it again. Changed arguments require explicit `servicemon manager stop` first. A failed replacement restores the previous registration; a failed first registration leaves no false success record.
 
-`startup disable` removes future login startup without stopping a live manager. `manager stop` is separate and does not remove the registration. Inactive old jobs are unloaded so same-session disable/enable works.
+`startup disable` removes future login startup without stopping a live manager. A later `manager restart` starts a detached replacement and keeps login startup disabled. `manager stop` is separate and does not remove the registration. Inactive old jobs are unloaded so same-session disable/enable works.
 
 The Homebrew launcher uses stable `opt` paths for both Servicemon and Node. It sets the internal `SERVICEMON_STARTUP_EXECUTABLE` value; startup stores that launcher, not a versioned Node path. There is no `brew services` controller. Checkout and npm startup still store absolute Node and CLI paths and need renewal after those paths move.
 
-For one-time migration of an old registration, stop the manager, disable startup, upgrade, then enable startup again. Installation and upgrades never renew registration for you.
+`manager restart` renews an existing registration through the current launcher after the old manager exits, without an extra detached manager. The current bound port becomes the port for later login starts, including when the old manager started with port `0`. Package installation alone does not renew the registration.
 
 The manager captures exported variables from the non-interactive login shell at startup and explicit reload. A login shell does not provide interactive aliases or functions. Commands must load their own environment files. Existing runs keep their old environment when reload captures a new one.
 
@@ -90,29 +88,40 @@ Use temporary config/state folders and uniquely named Compose projects. Remove o
 
 ## Upgrade and recovery
 
-Use these commands to upgrade a Homebrew installation.
+A package update replaces installed files, not the running manager process. `servicemon --version` reports the installed CLI version. `servicemon manager status` also reports the running manager version and protocol compatibility.
 
-Before any package or Node upgrade:
+For a Homebrew package update:
 
 ```sh
-servicemon manager stop
 brew upgrade sauravhiremath/tap/servicemon
-servicemon --version
-servicemon serve --background
+servicemon manager status
+servicemon manager restart
 servicemon dashboard
 ```
 
-Manager stop ends owned processes and tasks. Compose containers and volumes remain running. A running old manager is not upgraded by replacing files. `servicemon --version` reports the installed CLI version, not the running manager version. Stop the manager before upgrading, then start it with the installed command. For an old startup registration, use this explicit migration instead:
+Restart needs an existing manager. If none is running, use `servicemon serve --background`, or `servicemon startup enable` if you want login startup. Same-version source rebuilds are not detected; use explicit `manager restart` after building.
+
+The restart command checks config, dashboard files, launch settings, process ownership, and startup registration before it asks one question. It shows the running and installed versions, config, dashboard, affected processes and tasks, and any active operation. The default answer is no. EOF and Ctrl-C give no consent. For an unattended restart with the same interruption rules, use:
 
 ```sh
-servicemon manager stop
-servicemon startup disable
-brew upgrade sauravhiremath/tap/servicemon
-servicemon startup enable
-servicemon dashboard
+servicemon manager restart --yes --json
 ```
 
-To recover a bad release, stop the manager and use the earlier release's checksummed source archive and matching formula. Restore that formula in the local tap, run `brew reinstall --build-from-source sauravhiremath/tap/servicemon`, and run `brew test sauravhiremath/tap/servicemon` before starting normal services. Verify `servicemon --version` and retained config/logs. Do not replace a published archive under its old version.
+Restart stops owned processes and active tasks. Compose containers remain running. The replacement runs normal autostart only; it does not restore every previously running service or replay tasks. Task results and operation IDs are not retained across restart. Retained logs do not make task replay safe.
+
+The config path, state folder, current port, and built-in or custom dashboard setting are preserved. A conflicting explicit `--config` is rejected before shutdown. Each replacement captures the login environment again; it does not restore the old process environment. A registered manager starts through launchd. A detached manager starts through the installed CLI. No extra dashboard choice is needed.
+
+For automatic restart prompts and script behavior, see the [CLI compatibility table](cli.md#version-checks-and-manager-restart).
+
+### Restart failures
+
+Invalid config or dashboard files fail before shutdown. Changed ownership, config, registration, or restart impact cancels the attempt. Inspect `manager status` and fix the reported cause before a new attempt.
+
+Shutdown has a separate 60-second wait deadline. A timeout does not force-kill the old manager or launch another manager while the old identity or lock remains active. Let shutdown finish, then inspect status. If no manager remains, start it with `serve --background` or the existing startup registration.
+
+Restart success requires the intended replacement identity, version, config, state, and port, plus successful autostart. A launch or autostart failure reports its phase, cause, observed running state, and next command. Failed autostart can leave the replacement running. Read its status and manager stderr log before further action. There is no automatic rollback after shutdown.
+
+To recover a bad release, use the earlier release's checksummed source archive and matching formula. Restore that formula in the local tap, run `brew reinstall --build-from-source sauravhiremath/tap/servicemon`, and run `brew test sauravhiremath/tap/servicemon` before starting normal services. Releases with the management contract support the same restart checks for a downgrade. Verify both versions and retained config/logs. Do not replace a published archive under its old version.
 
 ## Removal and retained data
 

@@ -10,7 +10,9 @@ Homebrew and source builds are the install methods. `package.json` uses `private
 
 ## Version
 
-`package.json` is the version source. The CLI reads the installed metadata. Use `npm version <version> --no-git-tag-version` to change the package and lockfile versions. Match the Git tag, archive name, and formula version to that value. Never replace the bytes of a published version.
+`package.json` is the version source. The CLI and manager each read the installed metadata once when their process starts. Use `npm version <version> --no-git-tag-version` to change the package and lockfile versions. Match the Git tag, archive name, and formula version to that value. Never replace the bytes of a published version.
+
+The application protocol is an integer in `src/shared/build-info.ts`. Increase it for an incompatible application request or response change. Additive optional fields do not require an increase. Keep the management contract usable across application-protocol changes so status and guarded restart remain available.
 
 ## GitHub Actions
 
@@ -35,19 +37,10 @@ Hosted checks do not replace GUI logout/login, second-account access, Compose, o
 
 ## Check the source
 
-Use Node.js 24 or later. Dependency installation uses the committed lockfile with installation scripts disabled. Build-only frontend packages stay in `devDependencies`.
+Run the [contributor checks](../CONTRIBUTING.md#checks), including the platform checks on a suitable host, then run these release-only checks:
 
 ```sh
-npm ci --ignore-scripts
-npm run typecheck
-npm test
-npx --no-install playwright install chromium
-npm run test:e2e
-npm run smoke
 npm run check:runtime
-npm run smoke:startup
-npm run test:compose
-npm run smoke:compose
 npm run release:check
 npm pack --dry-run --ignore-scripts --json
 gitleaks git . --log-opts=--all --redact --no-banner
@@ -55,9 +48,7 @@ gitleaks git . --log-opts=--all --redact --no-banner
 
 `release:check` checks the MIT license, package contents, version, built assets, and locked dependency versions. `check:runtime` builds one fresh temporary source copy, removes development dependencies, checks the runtime tree against the lockfile, and exercises the installed CLI and dashboard. It does not prune the developer's installation.
 
-The installed smoke checks verify that a refreshed login environment applies to new runs without changing the environment of running services.
-
-Startup checks require a macOS GUI login session. Hosted CI sets `SERVICEMON_SKIP_LAUNCHD=1` and reports that scenario as skipped. Compose checks require a running Docker engine and Compose v2 or later. Do not run untrusted pull-request code on a machine with credentials.
+Hosted CI sets `SERVICEMON_SKIP_LAUNCHD=1` and reports that scenario as skipped. Do not run untrusted pull-request code on a machine with credentials.
 
 For cross-account access checks, start an isolated manager as one OS user. From a different OS account, check that `/`, `/api/status`, and allowed custom JSON assets are readable. A task action with a matching Origin header must work without credentials. Foreign Host/Origin headers and mutations without Origin must return 403. Custom `.env` paths must return 404. The second account must not be able to read the owner-only instance record from disk. HTTP access deliberately trusts all local users.
 
@@ -100,7 +91,7 @@ Use a clean OS account or disposable macOS machine, not normal working services:
 1. Confirm that config, state, manager, and login registration do not exist. Install from source and confirm they remain absent.
 2. Follow README first use through the formula launcher. Put an unrelated Node first in `PATH`. Validate config, open the plain dashboard URL, start/stop a service, run a task, read logs, and reload config.
 3. Enable isolated startup twice and confirm the manager PID is unchanged. A changed live registration must fail without stopping the manager.
-4. Stop explicitly. Upgrade the package and Node targets. Remove old fixture paths. Start the isolated LaunchAgent and verify the new task result.
+4. Upgrade the fixture package and Node targets while the old manager runs. Check both versions with `manager status`. Run `manager restart --yes --json` through the current stable launcher. Verify a new manager identity, preserved port and dashboard, completed autostart, and one JSON result. Remove old fixture paths and check the next login-start path.
 5. Check retained config/logs. Compose containers and volumes must remain after manager stop.
 6. Disable startup, stop the manager, uninstall, and check that user data remains.
 7. Restore an earlier formula and its checksummed archive. Reinstall from source, check the version, run `brew test`, and verify retained data and service control.

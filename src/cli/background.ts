@@ -6,12 +6,15 @@ import { fileURLToPath } from 'node:url';
 import { processIdentity } from '../config/process-identity.js';
 import { readInstance } from '../manager/instance.js';
 import { AppError } from '../shared/errors.js';
+import type { EnvironmentCaptureSelectors } from '../shared/types.js';
 
 export interface ServeOptions {
   config: string;
   state: string;
   port?: number;
   ui?: string;
+  environmentCapture?: EnvironmentCaptureSelectors;
+  replace?: { pid: number; startedAt: string };
 }
 function failureFromLog(text: string): AppError | undefined {
   const lines = text.trim().split('\n');
@@ -42,9 +45,22 @@ export async function startBackground(
   if (options.ui) {
     args.push('--ui', options.ui);
   }
+  const env: NodeJS.ProcessEnv = { ...process.env, SERVICEMON_STATE_DIR: options.state };
+  if (options.environmentCapture) {
+    if (options.environmentCapture.loginShell) {
+      env.SERVICEMON_LOGIN_SHELL = options.environmentCapture.loginShell;
+    } else {
+      delete env.SERVICEMON_LOGIN_SHELL;
+    }
+    if (options.environmentCapture.timeoutMs !== undefined) {
+      env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS = String(options.environmentCapture.timeoutMs);
+    } else {
+      delete env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS;
+    }
+  }
   const child = spawn(process.execPath, args, {
     detached: true,
-    env: { ...process.env, SERVICEMON_STATE_DIR: options.state },
+    env,
     stdio: ['ignore', output.fd, errors.fd],
   });
   await output.close();
@@ -69,10 +85,21 @@ export async function startBackground(
         const identity = await processIdentity(record.pid);
         const live = identity.state === 'alive' && identity.startedAt === record.startedAt;
         if (live && resolve(record.configPath) === absoluteConfig) {
-          child.unref();
-          return record.endpoint;
-        }
-        if (live) {
+          const previous =
+            options.replace !== undefined &&
+            record.pid === options.replace.pid &&
+            record.startedAt === options.replace.startedAt;
+          if (!previous) {
+            if (options.replace && record.pid !== child.pid) {
+              throw new AppError('MANAGER_CONFLICT', 'Another command replaced the manager.', {
+                expectedPid: child.pid,
+                observedPid: record.pid,
+              });
+            }
+            child.unref();
+            return record.endpoint;
+          }
+        } else if (live) {
           throw new AppError('MANAGER_CONFLICT', 'A manager uses a different config.', {
             active: record.configPath,
           });

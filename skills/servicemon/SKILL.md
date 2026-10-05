@@ -41,12 +41,18 @@ Run only registered tasks. Actions wait by default. If you use `--no-wait`, chec
 
 After manual YAML edits, run `servicemon config validate` and, if the manager is running, `servicemon reload`. CLI definition edits apply immediately when the manager is available.
 
+## Package updates and manager restart
+
+Package installation does not replace a running manager. Check `servicemon manager status --json`. If an application command returns `MANAGER_VERSION_MISMATCH`, do not bypass the check.
+
+With approval to interrupt owned processes and tasks, use `servicemon manager restart --yes --json`. Restart leaves Compose containers running and runs normal autostart only. Do not repeat a task because its operation ID is no longer available. On failure, inspect the reported phase, running state, and recovery command. Do not force-kill after a timeout or assume rollback. The Operations reference below covers preserved settings and recovery.
+
 ## Operating limits
 
 - Config commands execute as the user. Use only trusted commands and files.
 - All local users and processes can read and control the dashboard. Do not expose it through a proxy or tunnel.
 - `servicemon manager stop` stops the manager and its owned processes and tasks, but leaves Compose containers running. Do not stop unrelated projects to fix one service.
-- Stop the manager before Servicemon or Node upgrades. Before uninstalling, run `servicemon startup disable`, then `servicemon manager stop`.
+- Before uninstalling, run `servicemon startup disable`, then `servicemon manager stop`.
 - Uninstalling keeps config, retained logs, and Compose volumes.
 
 ## References

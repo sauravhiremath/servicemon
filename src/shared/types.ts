@@ -154,3 +154,48 @@ export interface Adapter {
   update?(entries: Entry[]): void;
   shutdown(): Promise<void>;
 }
+export interface EnvironmentCaptureSelectors {
+  loginShell?: string;
+  timeoutMs?: number;
+}
+export interface InstanceMetadata {
+  version: string;
+  applicationProtocol: number;
+  launchSettings: {
+    ui: string | null;
+    port: number;
+    environmentCapture?: EnvironmentCaptureSelectors;
+  };
+}
+interface PublicLaunchSettings {
+  port: number;
+  ui: string | null;
+}
+export interface StartupState {
+  state: 'running' | 'succeeded' | 'failed';
+  error?: ErrorData;
+}
+export interface ManagerImpact {
+  processEntryIds: string[];
+  taskIds: string[];
+  operation: { id: string; action: string } | null;
+  impactKey: string;
+}
+export interface ManagerInfo {
+  managementVersion: 1;
+  version: string;
+  applicationProtocol: number;
+  pid: number;
+  startedAt: string;
+  configPath: string;
+  endpoint: string;
+  launchSettings: PublicLaunchSettings;
+  startup: StartupState;
+  shutdown: { state: 'idle' | 'stopping' };
+  impact: ManagerImpact;
+}
+export interface ShutdownExpectation {
+  pid: number;
+  startedAt: string;
+  impactKey: string;
+}

@@ -8,8 +8,10 @@ import { errorData, AppError } from '../shared/errors.js';
 import type {
   Action,
   LogHistory,
+  ManagerInfo,
   Operation,
   RuntimeEvent,
+  ShutdownExpectation,
   Snapshot,
   Target,
 } from '../shared/types.js';
@@ -25,6 +27,8 @@ export interface ControlServerOptions {
   reload: () => Operation;
   edit: (edit: unknown) => Operation;
   shutdown: () => Promise<void>;
+  admitShutdown: (expected?: ShutdownExpectation) => void;
+  info: () => ManagerInfo;
   reloadError: () => Snapshot['reloadError'];
 }
 export interface ControlServer {
@@ -86,16 +90,20 @@ export async function startServer(options: ControlServerOptions): Promise<Contro
   });
   app.onError((error, c) => {
     const data = errorData(error);
+    const conflict = [
+      'OPERATION_BUSY',
+      'MANAGER_CONFLICT',
+      'OWNERSHIP_CONFLICT',
+      'STALE_CONFIG',
+      'CONFIG_BUSY',
+    ].includes(data.code);
     return c.json(
       { ok: false, data: null, error: data },
-      data.code === 'OPERATION_BUSY'
-        ? 409
-        : data.code === 'INVALID_INPUT' || data.code === 'INVALID_TARGET'
-          ? 400
-          : 500,
+      conflict ? 409 : data.code === 'INVALID_INPUT' || data.code === 'INVALID_TARGET' ? 400 : 500,
     );
   });
   app.get('/api/status', (c) => c.json({ ok: true, data: snapshot(), error: null }));
+  app.get('/api/manager/info', (c) => c.json({ ok: true, data: options.info(), error: null }));
   app.get('/api/projects', (c) =>
     c.json({ ok: true, data: options.operations.config.projects, error: null }),
   );
@@ -222,15 +230,23 @@ export async function startServer(options: ControlServerOptions): Promise<Contro
       }
     }),
   );
-  app.post('/api/manager/stop', (c) => {
-    setTimeout(
-      () =>
-        void options.shutdown().catch((error) => {
-          console.error(errorData(error));
-          process.exitCode = 1;
-        }),
-      50,
-    );
+  app.post('/api/manager/stop', async (c) => {
+    const raw = await c.req.text();
+    let body: unknown = {};
+    if (raw.trim() !== '') {
+      try {
+        body = JSON.parse(raw) as unknown;
+      } catch {
+        throw new AppError('INVALID_INPUT', 'Stop request must be JSON.');
+      }
+    }
+    options.admitShutdown(stopExpectation(body));
+    setTimeout(() => {
+      void options.shutdown().catch((error) => {
+        console.error(errorData(error));
+        process.exitCode = 1;
+      });
+    }, 50);
     return c.json({ ok: true, data: { stopping: true }, error: null });
   });
   app.get('*', async (c) => {
@@ -256,4 +272,42 @@ export async function startServer(options: ControlServerOptions): Promise<Contro
         server.closeAllConnections();
       }),
   };
+}
+function stopExpectation(body: unknown): ShutdownExpectation | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new AppError('INVALID_INPUT', 'Stop request must be a JSON object.');
+  }
+  const keys = Object.keys(body);
+  if (keys.length === 0) {
+    return undefined;
+  }
+  if (keys.length !== 1 || !('expected' in body)) {
+    throw new AppError('INVALID_INPUT', 'Stop request contains unsupported fields.');
+  }
+  const expected: unknown = body.expected;
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected)) {
+    throw new AppError('INVALID_INPUT', 'Shutdown expectation must be an object.');
+  }
+  if (
+    Object.keys(expected).length !== 3 ||
+    !('pid' in expected) ||
+    !('startedAt' in expected) ||
+    !('impactKey' in expected)
+  ) {
+    throw new AppError(
+      'INVALID_INPUT',
+      'Shutdown expectation requires pid, startedAt, and impactKey.',
+    );
+  }
+  const { pid, startedAt, impactKey } = expected;
+  if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) {
+    throw new AppError('INVALID_INPUT', 'Shutdown pid must be a positive integer.');
+  }
+  if (typeof startedAt !== 'string' || startedAt.length === 0) {
+    throw new AppError('INVALID_INPUT', 'Shutdown startedAt must be a string.');
+  }
+  if (typeof impactKey !== 'string' || impactKey.length === 0) {
+    throw new AppError('INVALID_INPUT', 'Shutdown impactKey must be a string.');
+  }
+  return { pid, startedAt, impactKey };
 }

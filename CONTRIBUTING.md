@@ -1,10 +1,10 @@
 # Contributing
 
-Keep reports and patches within the supported scope: a CLI and loopback dashboard for local development services. See [README.md](README.md) for platform support. Remote access, automatic recovery, and a native app are not supported.
+Keep reports and patches within the scope and platform support described in [README.md](README.md).
 
 ## Build from source
 
-Use macOS, Git, and Node.js 24 or later with npm. Docker is needed only for Compose entries and checks
+Use macOS, Git, and Node.js 24 or later with npm. Docker is needed only for Compose entries and checks.
 
 ```sh
 git clone https://github.com/sauravhiremath/servicemon.git
@@ -20,12 +20,14 @@ The build writes to `dist/`. It does not install or update a global `servicemon`
 
 ## Run locally
 
-Run the following from the repository root in one terminal. The temporary config and state keep this test separate from your normal services. Port `0` selects an available port. Do not enable login startup for this test.
+Run the following from the repository root in one terminal. The temporary config, state, and LaunchAgent settings keep this test separate from your normal services and login startup. Port `0` selects an available port. Do not enable login startup for this test.
 
 ```sh
 export SERVICEMON_DEV_DIR="$(mktemp -d "${TMPDIR:-/tmp}/servicemon-dev.XXXXXX")"
 export SERVICEMON_CONFIG="$SERVICEMON_DEV_DIR/config.yaml"
 export SERVICEMON_STATE_DIR="$SERVICEMON_DEV_DIR/state"
+export SERVICEMON_LAUNCH_AGENT_LABEL="com.servicemon.dev.${SERVICEMON_DEV_DIR##*/}"
+export SERVICEMON_LAUNCH_AGENTS_DIR="$SERVICEMON_DEV_DIR/agents"
 
 cat > "$SERVICEMON_CONFIG" <<'YAML'
 version: 1
@@ -45,23 +47,20 @@ node dist/cli/main.js logs demo/api --tail 10
 node dist/cli/main.js dashboard
 ```
 
-Status should show `demo/api` as running, and logs should contain `ready`. The example process exits after 10 minutes. `dashboard` opens your default browser and prints the plain manager URL. Open that URL manually if the browser does not open. No login is needed; all local users and processes can read and control this test manager.
-
-The manager serves the built dashboard. No separate frontend server is needed. Keep this terminal open and use it for further CLI commands so they use the same config and state.
+Status should show `demo/api` as running, and logs should contain `ready`. The example process exits after 10 minutes. `dashboard` opens the built dashboard; no frontend server is needed. Keep this terminal open so later commands use the same isolated settings.
 
 ### After source changes
 
-Stop the test manager before rebuilding. Replacing files does not update a running manager, and there is no automatic rebuild or restart.
+Rebuild, then replace the isolated manager. Replacing files does not update its running process. A same-version source rebuild does not trigger a version notice; use explicit restart.
 
 ```sh
-node dist/cli/main.js manager stop
 npm run build
-node dist/cli/main.js serve --background --port 0
+node dist/cli/main.js manager restart
 node dist/cli/main.js start demo/api
 node dist/cli/main.js dashboard
 ```
 
-Port `0` can select a different port after each restart; `dashboard` opens and prints the current URL. With a fixed port, you can reuse the same URL after a restart. Run `npm ci --ignore-scripts` before building if the lockfile changed.
+Restart stops the example service, so start it again explicitly. See [Upgrade and recovery](docs/operations.md#upgrade-and-recovery) for the full restart rules. Run `npm ci --ignore-scripts` before building if the lockfile changed.
 
 ### Stop and remove test data
 
@@ -71,6 +70,7 @@ In the same terminal, stop the test manager before removing its temporary data:
 node dist/cli/main.js manager stop &&
   rm -rf -- "${SERVICEMON_DEV_DIR:?Temporary test directory is not set}"
 unset SERVICEMON_CONFIG SERVICEMON_STATE_DIR SERVICEMON_DEV_DIR
+unset SERVICEMON_LAUNCH_AGENT_LABEL SERVICEMON_LAUNCH_AGENTS_DIR
 ```
 
 Closing the browser or terminal does not stop a background manager. If you lose the terminal, set `SERVICEMON_CONFIG` and `SERVICEMON_STATE_DIR` to the same temporary paths before running `manager stop`. Do not use your normal state folder to stop this test manager.
@@ -88,9 +88,10 @@ npm test
 npx --no-install playwright install chromium
 npm run test:e2e
 npm run smoke
+npm run smoke:update
 ```
 
-`npm test` builds and runs unit and integration tests. `test:e2e` builds and runs browser tests. `smoke` builds and installs a temporary package, then checks the installed CLI and dashboard. These commands do not update a global installation.
+`npm test` builds and runs unit and integration tests. `test:e2e` checks the browser. `smoke` checks a temporary installed package; `smoke:update` checks cross-version restart and real terminal consent. The smoke checks use isolated config and state and remove their fixtures. They do not change a global installation or your normal manager. `smoke:update` needs Python 3 with the standard `pty` module.
 
 ### Linting and formatting
 
@@ -112,7 +113,13 @@ Tests stay in scope. Generated output and `package-lock.json` are not formatted.
 
 ### Optional platform checks
 
-A real macOS GUI login session is needed for the startup checks. With a running Docker engine and Compose v2 or later, also run:
+A real macOS GUI login session is needed for the startup check:
+
+```sh
+npm run smoke:startup
+```
+
+The startup smoke uses a separate LaunchAgent label and checks registered restart through the stable launcher. Keep unavailable platform checks separate from passed checks. With a running Docker engine and Compose v2 or later, run the checks below with isolated fixture containers.
 
 ```sh
 npm run test:compose

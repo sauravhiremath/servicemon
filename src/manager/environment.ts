@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AppError } from '../shared/errors.js';
+import type { EnvironmentCaptureSelectors } from '../shared/types.js';
 
 function quote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
@@ -88,4 +89,21 @@ export async function captureEnvironment(): Promise<NodeJS.ProcessEnv> {
     clearTimeout(timer);
     await rm(directory, { recursive: true, force: true });
   }
+}
+export function environmentCaptureSelectors(
+  env: NodeJS.ProcessEnv = process.env,
+): EnvironmentCaptureSelectors | undefined {
+  const capture: EnvironmentCaptureSelectors = {};
+  const loginShell = env.SERVICEMON_LOGIN_SHELL;
+  if (loginShell) {
+    capture.loginShell = loginShell;
+  }
+  const rawTimeout = env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS;
+  if (rawTimeout) {
+    const timeoutMs = Number(rawTimeout);
+    if (Number.isInteger(timeoutMs) && timeoutMs > 0) {
+      capture.timeoutMs = timeoutMs;
+    }
+  }
+  return capture.loginShell === undefined && capture.timeoutMs === undefined ? undefined : capture;
 }

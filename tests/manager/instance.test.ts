@@ -5,6 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { acquireInstance, readInstance, writeInstance } from '../../src/manager/instance.js';
+import { applicationProtocol, packageVersion } from '../../src/shared/build-info.js';
 
 const exec = promisify(execFile);
 
@@ -125,5 +126,93 @@ describe('manager instance', () => {
     expect(acquired.record.configPath).toBe('/fresh.yaml');
     await acquired.release();
     await rm(state, { recursive: true, force: true });
+  });
+
+  it('requires metadata and does not let another token replace it', async () => {
+    const state = await mkdtemp(path.join(tmpdir(), 'servicemon-metadata-'));
+    const previous = process.env.SERVICEMON_LOGIN_SHELL;
+    delete process.env.SERVICEMON_LOGIN_SHELL;
+    delete process.env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS;
+    try {
+      const owner = await acquireInstance(state, 'one.yaml');
+      expect(owner.record.metadata).toEqual({
+        version: packageVersion,
+        applicationProtocol,
+        launchSettings: { ui: null, port: 0 },
+      });
+      owner.record.endpoint = 'http://127.0.0.1:7340';
+      owner.record.metadata = {
+        ...owner.record.metadata,
+        launchSettings: { ui: null, port: 7340 },
+      };
+      await writeInstance(state, owner.record);
+      const tampered = {
+        ...owner.record,
+        token: 'other-token',
+        metadata: {
+          ...owner.record.metadata,
+          version: '9.9.9',
+        },
+      };
+      await expect(writeInstance(state, tampered)).rejects.toMatchObject({
+        code: 'OWNERSHIP_CONFLICT',
+      });
+      expect(await readInstance(state)).toMatchObject({
+        metadata: { version: packageVersion, launchSettings: { port: 7340 } },
+      });
+      const file = path.join(state, 'instance.json');
+      const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Instance record was not an object.');
+      }
+      if ('metadata' in parsed) {
+        delete parsed.metadata;
+      }
+      await writeFile(file, JSON.stringify(parsed));
+      await expect(readInstance(state)).rejects.toMatchObject({ code: 'OWNERSHIP_CONFLICT' });
+      await owner.release();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SERVICEMON_LOGIN_SHELL;
+      } else {
+        process.env.SERVICEMON_LOGIN_SHELL = previous;
+      }
+      await rm(state, { recursive: true, force: true });
+    }
+  });
+
+  it('stores explicit environment selectors and omits them when unset', async () => {
+    const state = await mkdtemp(path.join(tmpdir(), 'servicemon-selectors-'));
+    const previous = {
+      shell: process.env.SERVICEMON_LOGIN_SHELL,
+      timeout: process.env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS,
+    };
+    process.env.SERVICEMON_LOGIN_SHELL = '/bin/zsh';
+    process.env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS = '2500';
+    try {
+      const selected = await acquireInstance(state, 'one.yaml');
+      expect(selected.record.metadata.launchSettings.environmentCapture).toEqual({
+        loginShell: '/bin/zsh',
+        timeoutMs: 2500,
+      });
+      await selected.release();
+      delete process.env.SERVICEMON_LOGIN_SHELL;
+      delete process.env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS;
+      const plain = await acquireInstance(state, 'one.yaml');
+      expect(plain.record.metadata.launchSettings.environmentCapture).toBeUndefined();
+      await plain.release();
+    } finally {
+      if (previous.shell === undefined) {
+        delete process.env.SERVICEMON_LOGIN_SHELL;
+      } else {
+        process.env.SERVICEMON_LOGIN_SHELL = previous.shell;
+      }
+      if (previous.timeout === undefined) {
+        delete process.env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS;
+      } else {
+        process.env.SERVICEMON_ENV_CAPTURE_TIMEOUT_MS = previous.timeout;
+      }
+      await rm(state, { recursive: true, force: true });
+    }
   });
 });

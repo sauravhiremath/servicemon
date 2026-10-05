@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Command } from 'commander';
 import { expect, it } from 'vitest';
+import type { ManagerClient } from '../../src/cli/client.js';
 import { addDefinitionCommands } from '../../src/cli/definitions.js';
 import { loadCandidate } from '../../src/config/reload.js';
 import { exitCode } from '../../src/shared/errors.js';
@@ -12,7 +13,14 @@ it('reports a missing config as config-not-found for validate and startup', asyn
   const missing = path.join(directory, 'missing.yaml');
   const program = new Command().name('servicemon').option('--config <path>').exitOverride();
   program.configureOutput({ writeErr() {}, writeOut() {} });
-  addDefinitionCommands(program);
+  addDefinitionCommands(program, {
+    async request() {
+      throw new Error('manager request');
+    },
+    async observeOperation() {
+      throw new Error('manager request');
+    },
+  } satisfies ManagerClient);
   const validate = await program
     .parseAsync(['config', 'validate', '--config', missing], { from: 'user' })
     .then(

@@ -37,11 +37,20 @@ export function exitCode(code: string): number {
       'OWNERSHIP_CONFLICT',
       'STALE_CONFIG',
       'CONFIG_BUSY',
+      'MANAGER_VERSION_MISMATCH',
     ].includes(code)
   ) {
     return 5;
   }
-  if (['MANAGER_UNAVAILABLE', 'DOCKER_UNAVAILABLE', 'TOOL_UNAVAILABLE'].includes(code)) {
+  if (
+    [
+      'MANAGER_UNAVAILABLE',
+      'DOCKER_UNAVAILABLE',
+      'TOOL_UNAVAILABLE',
+      'MANAGER_RESTART_TIMEOUT',
+      'MANAGER_RESTART_FAILED',
+    ].includes(code)
+  ) {
     return 3;
   }
   if (
