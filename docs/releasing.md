@@ -55,6 +55,8 @@ gitleaks git . --log-opts=--all --redact --no-banner
 
 `release:check` checks the MIT license, package contents, version, built assets, and locked dependency versions. `check:runtime` builds one fresh temporary source copy, removes development dependencies, checks the runtime tree against the lockfile, and exercises the installed CLI and dashboard. It does not prune the developer's installation.
 
+The installed smoke checks verify that a refreshed login environment applies to new runs without changing the environment of running services.
+
 Startup checks require a macOS GUI login session. Hosted CI sets `SERVICEMON_SKIP_LAUNCHD=1` and reports that scenario as skipped. Compose checks require a running Docker engine and Compose v2 or later. Do not run untrusted pull-request code on a machine with credentials.
 
 For cross-account access checks, start an isolated manager as one OS user. From a different OS account, check that `/`, `/api/status`, and allowed custom JSON assets are readable. A task action with a matching Origin header must work without credentials. Foreign Host/Origin headers and mutations without Origin must return 403. Custom `.env` paths must return 404. The second account must not be able to read the owner-only instance record from disk. HTTP access deliberately trusts all local users.

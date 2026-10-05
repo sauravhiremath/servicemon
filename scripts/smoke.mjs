@@ -99,7 +99,7 @@ try {
     },
   };
   config.projects.shared.services.db.command = command(
-    'const fs=require("fs");const write=()=>fs.writeFileSync("env-first",process.env.SERVICEMON_SMOKE_VALUE);write();setInterval(write,50)',
+    'const fs=require("fs");const write=()=>{fs.writeFileSync("env-first.tmp",process.env.SERVICEMON_SMOKE_VALUE);fs.renameSync("env-first.tmp","env-first")};write();setInterval(write,50)',
   );
   config.projects.shared.services.db.healthcheck = {
     type: 'command',
