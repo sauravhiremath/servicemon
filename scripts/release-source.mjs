@@ -56,7 +56,7 @@ const files = execFileSync('git', ['ls-tree', '-r', '--name-only', commit], { en
   .filter(
     (file) =>
       Object.hasOwn(top, file) ||
-      /^(src|tests|scripts|examples)\//.test(file) ||
+      /^(src|tests|scripts|examples|skills)\//.test(file) ||
       /^docs\/(config|cli|operations|acceptance|releasing)\.md$/.test(file) ||
       file.startsWith('.github/workflows/'),
   );

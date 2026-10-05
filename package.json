@@ -30,6 +30,7 @@
     "docs/releasing.md",
     "CONTRIBUTING.md",
     "examples",
+    "skills/servicemon",
     "LICENSE"
   ],
   "scripts": {

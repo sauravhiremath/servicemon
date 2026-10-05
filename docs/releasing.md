@@ -72,7 +72,7 @@ npm run release:source -- --ref <commit-sha> --output release-artifacts/<version
 node scripts/release-notes.mjs --manifest release-artifacts/<version>/manifest.json
 ```
 
-The generator uses `git archive` with an explicit file list: source, tests, build inputs, lockfile, MIT license, examples, and public instructions. It excludes plans, dependencies, local work folders, credentials, logs, test results, and caches. It builds and exercises that exact archive, then checks the production-only installation.
+The generator uses `git archive` with an explicit file list: source, tests, build inputs, lockfile, MIT license, examples, agent skills, and public instructions. It excludes plans, dependencies, local work folders, credentials, logs, test results, and caches. It builds and exercises that exact archive, then checks the production-only installation.
 
 The output directory contains `servicemon-<version>-source.tar.gz`, its SHA-256 file, `manifest.json`, and the generated `release-notes.md`. Existing archive and release-note files are not overwritten. Use a new output directory for a new build.
 
@@ -91,7 +91,7 @@ brew test sauravhiremath/tap/servicemon
 
 Use `brew --repository sauravhiremath/tap` to locate an installed tap. The generator checks the archive SHA-256 and defaults to its exact local file URL. It refuses to overwrite an existing formula. Preserve the old formula with its matching archive, then remove the old formula file before generating its replacement.
 
-The formula downloads locked packages with scripts disabled, builds the application, prunes development dependencies, and installs runtime files under `libexec`. Its launcher selects Homebrew Node and stable `opt` paths. It does not use global npm installation, start a manager, create user config, or register login startup. Its functional test uses temporary config/state and stops its fixture manager.
+The formula downloads locked packages with scripts disabled, builds the application, prunes development dependencies, and installs runtime files under `libexec`. Its launcher selects Homebrew Node and stable `opt` paths. It includes `skills/servicemon/SKILL.md` under `libexec` and prints an optional skill installation command. It does not install skills into agent directories, use global npm installation, start a manager, create user config, or register login startup. Its functional test uses temporary config/state and stops its fixture manager.
 
 ## Check installation and recovery
 

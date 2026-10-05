@@ -48,6 +48,7 @@ if (!values.runtime) {
     'CONTRIBUTING.md',
     'docs/releasing.md',
     'examples/services.yaml',
+    'skills/servicemon/SKILL.md',
   ]) {
     assert(paths.has(required), `Packed archive lacks ${required}`);
   }

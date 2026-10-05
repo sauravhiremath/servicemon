@@ -24,6 +24,16 @@ node dist/cli/main.js --help
 
 For source builds, replace `servicemon` in the commands below with `node dist/cli/main.js`. Building does not update an installed `servicemon` command. New contributors should follow [Build from source](CONTRIBUTING.md#build-from-source) and [Run locally](CONTRIBUTING.md#run-locally) for setup and a test that does not use their normal services.
 
+## Agent skill (optional)
+
+Install the [Servicemon skill](skills/servicemon/SKILL.md) to help your coding agent set up projects, control services, and read logs:
+
+```sh
+npx skills add sauravhiremath/servicemon --skill servicemon --global
+```
+
+Select the agents to install it for. `--global` makes the skill available across projects for your user; omit it for a project-only installation. Homebrew does not install agent skills automatically.
+
 ## First use
 
 Create `~/.config/servicemon/config.yaml`:
