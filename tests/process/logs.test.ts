@@ -55,22 +55,32 @@ describe('log store', () => {
     store.close();
   });
 
-  it('does not block append on a slow subscriber and reports a live gap', async () => {
+  it('defers subscriber delivery and retains history when live delivery overflows', async () => {
     const directory = await tempDir();
     const store = new LogStore(directory, { perEntryBytes: 100_000, totalBytes: 100_000 });
-    const seen: string[] = [];
-    store.subscribe('proj/api', (record) => seen.push(record.stream));
-    const started = Date.now();
-    for (let index = 0; index < 100; index += 1) {
-      store.append('proj/api', 'run-1', 'stdout', 'x');
+    try {
+      const seen: string[] = [];
+      store.subscribe('proj/api', (record) => seen.push(record.stream));
+      const messages = Array.from({ length: 100 }, (_, index) => String(index));
+      for (const message of messages) {
+        store.append('proj/api', 'run-1', 'stdout', message);
+      }
+      expect(seen).toEqual([]);
+      await flush();
+      expect(seen).toEqual(['gap']);
+      expect(store.history('proj/api').records.map((record) => record.text)).toEqual(messages);
+
+      store.append('proj/api', 'run-1', 'stdout', 'after gap');
+      expect(seen).toEqual(['gap']);
+      await flush();
+      expect(seen).toEqual(['gap', 'stdout']);
+      expect(store.history('proj/api').records.map((record) => record.text)).toEqual([
+        ...messages,
+        'after gap',
+      ]);
+    } finally {
+      store.close();
     }
-    expect(Date.now() - started).toBeLessThan(200);
-    expect(seen).toEqual([]);
-    await flush();
-    expect(seen).toContain('gap');
-    expect(seen.length).toBeLessThan(100);
-    expect(store.history('proj/api').records.length).toBe(100);
-    store.close();
   });
 
   it('does not duplicate records when history resumes at the live cursor', async () => {
