@@ -38,12 +38,9 @@ test('opens retained live logs in one dark tab per entry and pauses follow', asy
   await page.getByRole('tab', { name: 'Fixture A/talker' }).click();
   await expect(log).toContainText('hello-fixture');
   await expect(log).toContainText('line-4');
-  await expect
-    .poll(() => log.evaluate((node) => node.scrollHeight - node.clientHeight))
-    .toBeGreaterThan(24);
-  await log.evaluate((node) => {
-    node.scrollTop = 0;
-  });
+  await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeGreaterThan(24);
+  await log.hover();
+  await page.mouse.wheel(0, -600);
   await expect(page.getByRole('button', { name: 'Follow latest', exact: true })).toHaveAttribute(
     'aria-pressed',
     'false',
