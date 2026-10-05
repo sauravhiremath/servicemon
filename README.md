@@ -2,6 +2,8 @@
 
 **See and control your local development services across projects—in one dashboard.**
 
+<img width="3013" height="1756" alt="image" src="https://github.com/user-attachments/assets/4e62dc4a-7a72-4ba6-a444-6dce77a0e3d9" />
+
 Servicemon brings registered native services, tasks, and Docker Compose services into one localhost dashboard and CLI. Spend less time finding terminals, remembering service URLs, and checking what is running.
 
 - **See services by project.** Check state and health, read logs, and start or stop the services you need.
