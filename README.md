@@ -1,6 +1,15 @@
 # Servicemon
 
-A CLI and localhost dashboard for local development services. One manager controls all registered projects from one YAML config.
+**See and control your local development services across projects—in one dashboard.**
+
+Servicemon brings registered native services, tasks, and Docker Compose services into one localhost dashboard and CLI. Spend less time finding terminals, remembering service URLs, and checking what is running.
+
+- **See services by project.** Check state and health, read logs, and start or stop the services you need.
+- **Open configured service links.** Keep URLs with their services instead of remembering each port. Links come from config; Servicemon does not discover or enforce service ports.
+- **Keep your development commands.** Use existing commands, their reload behavior, and Compose files.
+- **Share control with coding agents.** Use the same registered services through the dashboard or CLI, with structured status and logs for agents.
+
+One manager controls all registered projects from one YAML config. If Compose, Process Compose, or a few terminals already make your setup easy to manage, you may not need another tool. See the [project vision](VISION.md).
 
 Requires Node.js 24 or later. Docker and Docker Compose are needed only for Compose entries.
 
