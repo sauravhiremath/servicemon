@@ -1,6 +1,6 @@
 # Servicemon
 
-**See and control your local development services across projects—in one dashboard.**
+**See and control your local development services across projects - in one dashboard.**
 
 <img width="3013" height="1756" alt="image" src="https://github.com/user-attachments/assets/4e62dc4a-7a72-4ba6-a444-6dce77a0e3d9" />
 
