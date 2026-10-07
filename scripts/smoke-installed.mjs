@@ -59,7 +59,8 @@ try {
     await delay(50);
   }
   assert.equal(info.startup.state, 'succeeded', JSON.stringify(info.startup));
-  assert.equal(info.managementVersion, 1);
+  assert.equal(info.managementVersion, 2);
+  assert.deepEqual(info.impact.operations, []);
   assert.equal(info.version, cliVersion);
   assert.equal(Number.isInteger(info.applicationProtocol), true);
   assert.equal(info.endpoint, endpoint);

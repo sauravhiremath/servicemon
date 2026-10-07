@@ -7,7 +7,7 @@ import { processIdentity } from '../../src/config/process-identity.js';
 import { applicationProtocol, packageVersion } from '../../src/shared/build-info.js';
 
 interface FixtureInfo {
-  managementVersion: 1;
+  managementVersion: 2;
   version: string;
   applicationProtocol: number;
   pid: number;
@@ -24,7 +24,7 @@ interface FixtureInfo {
   impact: {
     processEntryIds: string[];
     taskIds: string[];
-    operation: { id: string; action?: string } | null;
+    operations: { id: string; action: string }[];
     impactKey: string;
   };
 }
@@ -66,7 +66,8 @@ export async function startManagementDouble(options?: {
   impactKey?: string;
   processEntryIds?: string[];
   taskIds?: string[];
-  operation?: { id: string; action?: string } | null;
+  operations?: { id: string; action: string }[];
+  legacyImpact?: { operation: { id: string; action?: string } | null };
   liveProcess?: boolean;
   infoStatus?: number;
   infoBody?: unknown;
@@ -107,7 +108,21 @@ export async function startManagementDouble(options?: {
           send(response, options.infoStatus ?? 200, options.infoBody);
           return;
         }
-        send(response, 200, { ok: true, data: published.info, error: null });
+        const info = published.info;
+        const data =
+          options?.legacyImpact && info
+            ? {
+                ...info,
+                managementVersion: 1,
+                impact: {
+                  processEntryIds: info.impact.processEntryIds,
+                  taskIds: info.impact.taskIds,
+                  ...options.legacyImpact,
+                  impactKey: info.impact.impactKey,
+                },
+              }
+            : info;
+        send(response, 200, { ok: true, data, error: null });
         return;
       }
       if (request.method === 'POST' && request.url === '/api/manager/stop') {
@@ -137,6 +152,7 @@ export async function startManagementDouble(options?: {
             target: { entry: 'demo/api' },
             state: 'pending',
             affected: ['demo/api'],
+            scope: ['demo/api'],
             startedAt: '2026-10-05T00:00:00.000Z',
           },
           error: null,
@@ -168,7 +184,7 @@ export async function startManagementDouble(options?: {
   }
   const endpoint = `http://127.0.0.1:${address.port}`;
   const info: FixtureInfo = {
-    managementVersion: 1,
+    managementVersion: 2,
     version: options?.version ?? packageVersion,
     applicationProtocol: options?.protocol ?? applicationProtocol,
     pid,
@@ -181,8 +197,7 @@ export async function startManagementDouble(options?: {
     impact: {
       processEntryIds: options?.processEntryIds ?? ['demo/api'],
       taskIds: options?.taskIds ?? ['demo/once'],
-      operation:
-        options?.operation === undefined ? { id: 'op-wait', action: 'start' } : options.operation,
+      operations: options?.operations ?? [{ id: 'op-wait', action: 'start' }],
       impactKey: options?.impactKey ?? 'impact-a',
     },
   };

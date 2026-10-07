@@ -5,6 +5,7 @@ import path from 'node:path';
 import { expect, it } from 'vitest';
 import { startBackground } from '../../src/cli/background.js';
 import { processIdentity } from '../../src/config/process-identity.js';
+import { applicationProtocol, packageVersion } from '../../src/shared/build-info.js';
 import { exitCode } from '../../src/shared/errors.js';
 
 // The replacement process waits before publishing. The parent must observe the
@@ -17,7 +18,7 @@ const startedAt = execFileSync('/bin/ps', ['-p', String(process.pid), '-o', 'lst
 const config = process.argv[process.argv.indexOf('--config') + 1];
 await writeFile(process.env.SERVICEMON_STATE_DIR + '/instance.json', JSON.stringify({
   configPath: config, endpoint: 'http://127.0.0.1:4242', pid: process.pid, startedAt, token: 'new',
-  metadata: { version: '0.1.2', applicationProtocol: 1, launchSettings: { ui: null, port: 4242 } },
+  metadata: { version: ${JSON.stringify(packageVersion)}, applicationProtocol: ${applicationProtocol}, launchSettings: { ui: null, port: 4242 } },
 }));
 setInterval(() => {}, 1000);
 `;
@@ -46,8 +47,8 @@ it('does not report a dead manager endpoint while the replacement is still start
         startedAt: 'dead',
         token: 'old',
         metadata: {
-          version: '0.1.2',
-          applicationProtocol: 1,
+          version: packageVersion,
+          applicationProtocol,
           launchSettings: { ui: null, port: 9 },
         },
       }),
@@ -127,8 +128,8 @@ it('reuses a live manager and does not signal a manager for another config', asy
         startedAt: identity.startedAt,
         token: 'live',
         metadata: {
-          version: '0.1.2',
-          applicationProtocol: 1,
+          version: packageVersion,
+          applicationProtocol,
           launchSettings: { ui: null, port: 7331 },
         },
       }),
@@ -174,8 +175,8 @@ it('does not report the previous manager endpoint as replacement success', async
         startedAt: identity.startedAt,
         token: 'old',
         metadata: {
-          version: '0.1.2',
-          applicationProtocol: 1,
+          version: packageVersion,
+          applicationProtocol,
           launchSettings: { ui: null, port: 7331 },
         },
       }),

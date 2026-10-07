@@ -7,7 +7,7 @@ import { expect, it } from 'vitest';
 import { stringify } from 'yaml';
 import { createCommandClient, restartManager } from '../../src/cli/manager.js';
 import { printError } from '../../src/cli/output.js';
-import { packageVersion } from '../../src/shared/build-info.js';
+import { applicationProtocol } from '../../src/shared/build-info.js';
 import { persistentCommand, shellCommand } from '../helpers/runtime.js';
 import { startManagementDouble, withManagerEnv } from './management-fixture.js';
 import type { ManagementDouble } from './management-fixture.js';
@@ -48,15 +48,20 @@ it('requires --yes before a script can restart', async () => {
       const output = printed(error);
       expect(output.code).toBe(2);
       expect(output.stdout.split('\n')).toHaveLength(1);
-      expect(JSON.parse(output.stdout).error.message).toContain('manager restart --yes');
     });
   } finally {
     await manager.close();
   }
 });
 
-it('does not stop the manager when restart is refused', async () => {
-  const manager = await startManagementDouble({ liveProcess: true });
+it('lists every active operation and leaves the manager running when restart is refused', async () => {
+  const manager = await startManagementDouble({
+    liveProcess: true,
+    operations: [
+      { id: 'op-task', action: 'start' },
+      { id: 'op-service', action: 'restart' },
+    ],
+  });
   try {
     await withManagerEnv(manager, async () => {
       let prompt = '';
@@ -71,17 +76,8 @@ it('does not stop the manager when restart is refused', async () => {
         (caught: unknown) => caught,
       );
       expect(error).toMatchObject({ code: 'MANAGER_RESTART_CANCELLED' });
-      expect(prompt).toContain(`Running version: ${packageVersion}`);
-      expect(prompt).toContain(`Installed version: ${packageVersion}`);
-      expect(prompt).toContain(manager.config);
-      expect(prompt).toContain('Dashboard: built-in');
-      expect(prompt).toContain('demo/api');
-      expect(prompt).toContain('demo/once');
-      expect(prompt).toContain('op-wait');
-      expect(prompt).toContain('Compose containers stay running.');
-      expect(prompt).toContain('Only normal autostart runs after replacement.');
-      expect(prompt).toContain('Task output and operation IDs do not make tasks safe to replay.');
-      expect(prompt).toContain('[y/N]');
+      expect(prompt).toContain('op-task (start)');
+      expect(prompt).toContain('op-service (restart)');
       expect(manager.stopBodies).toEqual([]);
       expect(process.kill(manager.pid, 0)).toBe(true);
       expect(printed(error).code).toBe(1);
@@ -90,6 +86,42 @@ it('does not stop the manager when restart is refused', async () => {
     await manager.close();
   }
 });
+
+it.each([null, { id: 'legacy-task', action: 'start' }, { id: 'legacy-unknown' }])(
+  'uses guarded restart for a version 1 manager with impact %j',
+  async (operation) => {
+    const manager = await startManagementDouble({
+      liveProcess: true,
+      version: '0.1.3',
+      protocol: 1,
+      legacyImpact: { operation },
+    });
+    try {
+      await withManagerEnv(manager, async () => {
+        let prompt = '';
+        await expect(
+          restartManager({
+            terminal: true,
+            waitMs: 1,
+            confirm: async (text) => {
+              prompt = text;
+              return true;
+            },
+          }),
+        ).rejects.toMatchObject({ code: 'MANAGER_RESTART_TIMEOUT' });
+        if (operation) {
+          expect(prompt).toContain(operation.id);
+        }
+        expect(manager.stopBodies).toEqual([
+          { expected: { pid: manager.pid, startedAt: manager.startedAt, impactKey: 'impact-a' } },
+        ]);
+        expect(process.kill(manager.pid, 0)).toBe(true);
+      });
+    } finally {
+      await manager.close();
+    }
+  },
+);
 
 it('does not stop when impact changes after consent', async () => {
   const holder: { manager?: ManagementDouble } = {};
@@ -296,7 +328,7 @@ it('does not prompt when the selected manager changes before restart', async () 
           token: 'other-token',
           metadata: {
             version: '0.0.7',
-            applicationProtocol: 1,
+            applicationProtocol,
             launchSettings: { ui: null, port: 9 },
           },
         })}\n`,

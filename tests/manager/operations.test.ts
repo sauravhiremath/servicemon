@@ -162,16 +162,16 @@ it('leaves a timed-out prerequisite running without starting its dependent after
     await manager.close();
   }
 });
-it('reports conflicting submissions while reads remain available', async () => {
+it('allows independent actions during readiness waits but rejects overlapping requests', async () => {
   const manager = await fixtureManager({
     app: {
       services: {
         api: {
           command: persistentCommand,
-          readiness_seconds: 0.5,
+          readiness_seconds: 60,
           healthcheck: {
             type: 'command',
-            command: 'exit 1',
+            command: 'test -f ready',
             interval_seconds: 0.05,
             timeout_seconds: 0.05,
           },
@@ -181,16 +181,92 @@ it('reports conflicting submissions while reads remain available', async () => {
     },
   });
   try {
-    const accepted = await manager.api(route('app/api', 'start'), {});
-    expect(accepted.ok).toBe(true);
-    const conflicting = await manager.api(route('app/ui', 'start'), {});
-    expect(conflicting.ok).toBe(false);
-    if (!conflicting.ok) {
-      expect(conflicting.error.code).toBe('OPERATION_BUSY');
+    const accepted = await manager.api<{ operationId: string }>(route('app/api', 'start'), {});
+    if (!accepted.ok) {
+      throw new Error(accepted.error.message);
     }
-    expect((await manager.snapshot()).entries.find((e) => e.id === 'app/ui')!.state).toBe(
-      'stopped',
+    expect((await manager.operation(route('app/ui', 'start'))).state).toBe('succeeded');
+    const conflicting = await manager.api(route('app/api', 'restart'), {});
+    expect(conflicting).toMatchObject({
+      ok: false,
+      error: {
+        code: 'OPERATION_BUSY',
+        details: { operationId: accepted.data.operationId, entryIds: ['app/api'] },
+      },
+    });
+    const snapshot = await manager.snapshot();
+    expect(snapshot.entries.find((entry) => entry.id === 'app/ui')!.state).toBe('running');
+    expect(
+      snapshot.operations.find((operation) => operation.id === accepted.data.operationId)!.state,
+    ).toBe('running');
+  } finally {
+    await manager.close();
+  }
+});
+
+it('keeps task results and logs while independent CLI service actions complete', async () => {
+  const manager = await fixtureManager({
+    skillopt: {
+      tasks: {
+        'sol-full': {
+          command: 'echo task-waiting; while [ ! -f release ]; do sleep 0.05; done; echo task-done',
+        },
+      },
+      services: { local: { command: persistentCommand } },
+    },
+    'jobs-apply': { services: { ui: { command: persistentCommand } } },
+  });
+  try {
+    const accepted = await manager.api<{ operationId: string }>(
+      route('skillopt/sol-full', 'run'),
+      {},
     );
+    if (!accepted.ok) {
+      throw new Error(accepted.error.message);
+    }
+    for (const action of ['start', 'restart', 'stop']) {
+      const result = await manager.cli(action, 'jobs-apply/ui', '--json');
+      expect(result.code).toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, data: { state: 'succeeded' } });
+    }
+    expect((await manager.cli('start', 'skillopt/local', '--json')).code).toBe(0);
+    const busy = await manager.cli('run', 'skillopt/sol-full', '--json');
+    expect(JSON.parse(busy.stdout)).toMatchObject({ ok: false, error: { code: 'OPERATION_BUSY' } });
+    expect(await manager.api('/api/config/reload', {})).toMatchObject({
+      ok: false,
+      error: { code: 'OPERATION_BUSY' },
+    });
+    expect(await manager.api('/api/config/edit', { action: 'unused' })).toMatchObject({
+      ok: false,
+      error: { code: 'OPERATION_BUSY' },
+    });
+    expect(
+      (await manager.cli('logs', 'skillopt/sol-full', '--tail', '10', '--json')).stdout,
+    ).toContain('task-waiting');
+    expect(
+      (await manager.snapshot()).operations.find(
+        (operation) => operation.id === accepted.data.operationId,
+      )!.state,
+    ).toBe('running');
+    await writeFile(join(manager.folder, 'release'), '');
+    const deadline = Date.now() + 5000;
+    let snapshot = await manager.snapshot();
+    while (
+      snapshot.operations.find((operation) => operation.id === accepted.data.operationId)!.state ===
+        'running' &&
+      Date.now() < deadline
+    ) {
+      await delay(25);
+      snapshot = await manager.snapshot();
+    }
+    expect(
+      snapshot.operations.find((operation) => operation.id === accepted.data.operationId),
+    ).toMatchObject({ state: 'succeeded' });
+    expect(snapshot.entries.find((entry) => entry.id === 'skillopt/sol-full')).toMatchObject({
+      state: 'succeeded',
+      exit: { code: 0 },
+    });
+    expect((await manager.operation('/api/config/reload')).state).toBe('succeeded');
   } finally {
     await manager.close();
   }

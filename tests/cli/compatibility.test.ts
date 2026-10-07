@@ -105,9 +105,38 @@ it('continues a compatible script and writes the version notice only to stderr',
   }
 });
 
+it.each([null, { id: 'published-task', action: 'start' }])(
+  'inspects published version 1 impact %j without application requests',
+  async (operation) => {
+    const manager = await startManagementDouble({
+      version: '0.1.3',
+      protocol: 1,
+      legacyImpact: { operation },
+    });
+    try {
+      await withManagerEnv(manager, async () => {
+        await expect(managerStatus()).resolves.toMatchObject({
+          managerVersion: '0.1.3',
+          applicationProtocol: 1,
+          compatible: false,
+          restartRequired: true,
+        });
+        const client = createCommandClient({ terminal: false });
+        await expect(client.request('/api/status')).rejects.toMatchObject({
+          code: 'MANAGER_VERSION_MISMATCH',
+        });
+        expect(manager.hits).toEqual(['GET /api/manager/info', 'GET /api/manager/info']);
+        expect(manager.stopBodies).toEqual([]);
+      });
+    } finally {
+      await manager.close();
+    }
+  },
+);
+
 it('does not treat an invalid management response as a version mismatch', async () => {
   const manager = await startManagementDouble({
-    infoBody: { ok: true, data: { managementVersion: 1 }, error: null },
+    infoBody: { ok: true, data: { managementVersion: 2 }, error: null },
   });
   try {
     await withManagerEnv(manager, async () => {
@@ -137,8 +166,8 @@ it('keeps later requests on the selected manager', async () => {
           startedAt: 'replaced',
           token: 'other-token',
           metadata: {
-            version: '0.1.2',
-            applicationProtocol: 1,
+            version: packageVersion,
+            applicationProtocol,
             launchSettings: { ui: null, port: 9 },
           },
         })}\n`,
@@ -177,8 +206,8 @@ it('does not restart or drop an existing operation id when the version differs',
           startedAt: 'replaced',
           token: 'other-token',
           metadata: {
-            version: '0.1.2',
-            applicationProtocol: 1,
+            version: packageVersion,
+            applicationProtocol,
             launchSettings: { ui: null, port: 9 },
           },
         })}\n`,

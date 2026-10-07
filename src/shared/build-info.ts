@@ -20,4 +20,4 @@ function readPackageVersion(): string {
 export const packageVersion = readPackageVersion();
 
 /** Application requests are compatible only when this integer matches. */
-export const applicationProtocol = 1;
+export const applicationProtocol = 2;

@@ -8,7 +8,7 @@ The state folder is owner-only. Instance records, process ownership records, and
 
 Owned commands run through a non-interactive shell in detached process groups. Stop sends a graceful signal to the owned group, waits for its deadline, then force-stops that same verified group. PID reuse or uncertain ownership must not cause an unrelated process to be signalled. Ordinary external processes are not attached, discovered by port, or stopped. Commands must remain foreground; do not use daemon mode or shell backgrounding.
 
-Manager shutdown stops owned services and active tasks. It closes Docker observation but leaves Compose containers and volumes running. Closing the browser has no effect on service lifetime.
+Manager shutdown rejects new actions, stops owned services and active tasks, and waits for all active operations to finish. It closes Docker observation but leaves Compose containers and volumes running. Closing the browser has no effect on service lifetime.
 
 If the manager stops, the dashboard keeps the last state and shows an unavailable message. After the manager starts again on the same port, use Retry or reload the page. If the port changed, run `servicemon dashboard` to open the current URL. A manager restart resets task results; retained process/task logs remain available.
 
@@ -21,7 +21,7 @@ Services without a health check display `-`, whether running or stopped. Service
 Click a value in Cmd / Compose file to copy its full text, including text hidden by the ellipsis. The same action works with Enter or Space. A toast at the bottom says "Copied to clipboard" when the copy succeeds. If the copy fails, the toast says "Could not copy to clipboard". Drag a boundary line in the column header to resize it. You can also focus the boundary and use the Left or Right arrow key.
 
 Project and Compose group actions appear beside their groups. Group Stop actions require confirmation. Entry Stop does not add a confirmation step. Settings contains Copy config path and Reload config. The existing stop-and-apply prompt remains available when reload requires it.
-Entry controls appear in this order: Start, Run, or Stop; Restart when a service or Compose entry is running; Logs. Tasks and entries that are not running do not show Restart. Restart is disabled while an operation is in progress. Project and Compose group Actions menus retain Start, Stop, and Restart.
+Entry controls appear in this order: Start, Run, or Stop; Restart when a service or Compose entry is running; Logs. Tasks and entries that are not running do not show Restart. An active operation disables controls for its reserved entries, including prerequisites that have not started. Unrelated entry controls remain available. Project and Compose group Actions menus retain Start, Stop, and Restart; their actions are disabled when any member is reserved. Reload config is disabled while an operation is active. Logs remain available.
 
 Select Logs to open retained output. The log controls and retention rules are described below.
 
@@ -42,7 +42,11 @@ Select Logs to open retained output. The log controls and retention rules are de
 | Log source unavailable       | Error is shown; previous text is not replaced with invented output |
 | Custom UI missing or invalid | Serve fails with the file error                                    |
 
-Operations are serialized. Mutating requests can report busy instead of changing entries concurrently. Config edits detect file changes before commit. If a required stop fails, the candidate config is not applied; already completed stops are reported.
+Each operation reserves its scope before execution. The scope includes selected entries, startup prerequisites, and entries included by restart rules. Compose actions also reserve the other entries in each affected Compose group because Docker can change native dependencies. Independent scopes can run concurrently, even within one project. Task completion and readiness waits do not block unrelated actions.
+
+Overlapping requests fail immediately with `OPERATION_BUSY`; they are not queued. The error details identify the blocking operation and overlapping entry IDs. A reservation lasts until the operation succeeds or fails. Status, logs, and operation reads remain available.
+
+Reload and config edits require exclusive access: they conflict with every active operation and block new actions until they finish. Config edits detect file changes before commit. If a required stop fails, the candidate config is not applied; already completed stops are reported.
 
 ## Logs
 
@@ -101,7 +105,7 @@ servicemon dashboard
 
 Restart needs an existing manager. If none is running, use `servicemon serve --background`, or `servicemon startup enable` if you want login startup. Same-version source rebuilds are not detected; use explicit `manager restart` after building.
 
-The restart command checks config, dashboard files, launch settings, process ownership, and startup registration before it asks one question. It shows the running and installed versions, config, dashboard, affected processes and tasks, and any active operation. The default answer is no. EOF and Ctrl-C give no consent. For an unattended restart with the same interruption rules, use:
+The restart command checks config, dashboard files, launch settings, process ownership, and startup registration before it asks one question. It shows the running and installed versions, config, dashboard, affected processes and tasks, and all active operations. An operation that starts or finishes invalidates earlier restart consent. The default answer is no. EOF and Ctrl-C give no consent. For an unattended restart with the same interruption rules, use:
 
 ```sh
 servicemon manager restart --yes --json
@@ -121,7 +125,7 @@ Shutdown has a separate 60-second wait deadline. A timeout does not force-kill t
 
 Restart success requires the intended replacement identity, version, config, state, and port, plus successful autostart. A launch or autostart failure reports its phase, cause, observed running state, and next command. Failed autostart can leave the replacement running. Read its status and manager stderr log before further action. There is no automatic rollback after shutdown.
 
-To recover a bad release, use the earlier release's checksummed source archive and matching formula. Restore that formula in the local tap, run `brew reinstall --build-from-source sauravhiremath/tap/servicemon`, and run `brew test sauravhiremath/tap/servicemon` before starting normal services. Releases with the management contract support the same restart checks for a downgrade. Verify both versions and retained config/logs. Do not replace a published archive under its old version.
+To recover a bad release, use the earlier release's checksummed source archive and matching formula. Before you install an older CLI that cannot read the current management contract, stop the manager with the current CLI. Restore the earlier formula in the local tap, run `brew reinstall --build-from-source sauravhiremath/tap/servicemon`, and run `brew test sauravhiremath/tap/servicemon` before starting normal services. Verify both versions and retained config/logs. Do not replace a published archive under its old version.
 
 ## Removal and retained data
 

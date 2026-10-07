@@ -91,7 +91,7 @@ npm run smoke
 npm run smoke:update
 ```
 
-`npm test` builds and runs unit and integration tests. `test:e2e` checks the browser. `smoke` checks a temporary installed package; `smoke:update` checks cross-version restart and real terminal consent. The smoke checks use isolated config and state and remove their fixtures. They do not change a global installation or your normal manager. `smoke:update` needs Python 3 with the standard `pty` module.
+`npm test` builds and runs unit and integration tests. `test:e2e` checks the browser. `smoke` checks a temporary installed package. `smoke:update` checks cross-version restart, concurrent task interruption, and real terminal consent. It downloads the published 0.1.3 source archive and checksum to check an upgrade from management contract 1. This check needs network access and Python 3 with the standard `pty` module. The smoke checks use isolated config and state and remove their fixtures. They do not change a global installation or your normal manager.
 
 ### Linting and formatting
 

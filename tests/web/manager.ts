@@ -46,7 +46,11 @@ ${a.map(serviceYaml).join('')}
 ${b.map(serviceYaml).join('')}`;
 }
 
-export const test = base.extend<{ manager: Manager }, { installedCli: string }>({
+export const test = base.extend<
+  { manager: Manager; managerConfig: string | null },
+  { installedCli: string }
+>({
+  managerConfig: [null, { option: true }],
   installedCli: [
     async ({}, runFixture) => {
       const directory = await mkdtemp(path.join(tmpdir(), 'servicemon-web-install-'));
@@ -68,11 +72,15 @@ export const test = base.extend<{ manager: Manager }, { installedCli: string }>(
     },
     { scope: 'worker' },
   ],
-  manager: async ({ installedCli, page }, runFixture) => {
+  manager: async ({ installedCli, page, managerConfig }, runFixture) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'servicemon-web-'));
     const stateDir = path.join(directory, 'state');
     const configPath = path.join(directory, 'config.yaml');
-    await writeFile(configPath, fixtureConfig(directory));
+    await writeFile(
+      configPath,
+      managerConfig?.replaceAll('$DIRECTORY', JSON.stringify(directory)) ??
+        fixtureConfig(directory),
+    );
     const port = 0;
     const cli = installedCli;
     const child = spawn(

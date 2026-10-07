@@ -46,6 +46,8 @@ export function isOperation(value: unknown): value is Operation {
     typeof operation.id === 'string' &&
     typeof operation.action === 'string' &&
     typeof operation.state === 'string' &&
+    (operation.scope === null ||
+      (Array.isArray(operation.scope) && operation.scope.every((id) => typeof id === 'string'))) &&
     !!operation.target
   );
 }

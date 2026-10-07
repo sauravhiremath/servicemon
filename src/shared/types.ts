@@ -123,6 +123,7 @@ export interface Operation {
   action: string;
   target: Target;
   state: 'pending' | 'running' | 'succeeded' | 'failed';
+  scope: string[] | null;
   affected: string[];
   startedAt: string;
   finishedAt?: string;
@@ -178,11 +179,11 @@ export interface StartupState {
 export interface ManagerImpact {
   processEntryIds: string[];
   taskIds: string[];
-  operation: { id: string; action: string } | null;
+  operations: { id: string; action: string }[];
   impactKey: string;
 }
 export interface ManagerInfo {
-  managementVersion: 1;
+  managementVersion: 2;
   version: string;
   applicationProtocol: number;
   pid: number;

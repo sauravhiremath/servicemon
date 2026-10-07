@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -14,6 +15,7 @@ const root = await mkdtemp(path.join(tmpdir(), 'servicemon-update-'));
 const sessions = [];
 let oldCli;
 let newCli;
+let publishedCli;
 let composeCleanup;
 let failure;
 
@@ -178,7 +180,9 @@ async function settledInfo(endpoint) {
 }
 
 function assertIdentity(info, { version, endpoint, ui }) {
-  assert.equal(info.managementVersion, 1);
+  assert.equal(info.managementVersion, 2);
+  assert.equal(Array.isArray(info.impact.operations), true);
+  assert.equal('operation' in info.impact, false);
   assert.equal(info.version, version);
   assert.equal(Number.isInteger(info.applicationProtocol), true);
   assert.equal(info.endpoint, endpoint);
@@ -320,6 +324,105 @@ async function installTrees() {
       newCli = cli;
     }
   }
+}
+
+async function installPublishedTree() {
+  const source = path.join(root, 'published-source');
+  const name = 'servicemon-0.1.3-source.tar.gz';
+  const archive = path.join(root, name);
+  const release = 'https://github.com/sauravhiremath/servicemon/releases/download/v0.1.3';
+  const [response, checksumResponse] = await Promise.all([
+    fetch(`${release}/${name}`),
+    fetch(`${release}/${name}.sha256`),
+  ]);
+  assert.equal(response.ok, true, `Published archive returned HTTP ${response.status}`);
+  assert.equal(
+    checksumResponse.ok,
+    true,
+    `Published checksum returned HTTP ${checksumResponse.status}`,
+  );
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const checksum = (await checksumResponse.text()).trim().split(/\s+/)[0];
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), checksum);
+  await writeFile(archive, bytes);
+  await mkdir(source, { recursive: true });
+  await exec('tar', ['-xzf', archive, '--strip-components=1', '-C', source], {
+    timeout: 30000,
+    encoding: 'utf8',
+  });
+  await exec('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
+    cwd: source,
+    timeout: 180000,
+    encoding: 'utf8',
+  });
+  await exec('npm', ['run', 'build'], { cwd: source, timeout: 180000, encoding: 'utf8' });
+  const packed = JSON.parse(
+    (
+      await exec('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', source], {
+        cwd: source,
+        timeout: 120000,
+        encoding: 'utf8',
+      })
+    ).stdout,
+  )[0];
+  const prefix = path.join(root, 'published');
+  await exec(
+    'npm',
+    [
+      'install',
+      '--ignore-scripts',
+      '--prefix',
+      prefix,
+      '--no-audit',
+      '--no-fund',
+      path.join(source, packed.filename),
+    ],
+    { timeout: 180000, encoding: 'utf8' },
+  );
+  publishedCli = path.join(prefix, 'node_modules/.bin/servicemon');
+  assert.equal(
+    (await exec(publishedCli, ['--version'], { encoding: 'utf8' })).stdout.trim(),
+    '0.1.3',
+  );
+}
+
+async function publishedUpgrade() {
+  const dir = path.join(root, 'published-upgrade');
+  const { env } = await openFixture(
+    'published-upgrade',
+    serviceDefinition(dir, {
+      services: { worker: { command: sleepCommand() } },
+    }),
+  );
+  const started = await json(publishedCli, env, ['serve', '--background', '--port', '0']);
+  await json(publishedCli, env, ['start', 'demo/worker']);
+  const before = await settledInfo(started.endpoint);
+  assert.equal(before.managementVersion, 1);
+  assert.equal(before.applicationProtocol, 1);
+  assert.equal(before.impact.operation, null);
+  assertStatus(await json(newCli, env, ['manager', 'status']), {
+    cliVersion: NEW_VERSION,
+    managerVersion: '0.1.3',
+    compatible: false,
+    restartRequired: true,
+  });
+  const blocked = await invoke(newCli, env, ['status', '--json']);
+  assert.equal(blocked.code, 5, blocked.stdout + blocked.stderr);
+  assert.equal(envelope(blocked.stdout, 'published status').error.code, 'MANAGER_VERSION_MISMATCH');
+  const result = await restartJson(env);
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  const data = readRestart(result.body.data);
+  assert.equal(data.previous.version, '0.1.3');
+  assert.notEqual(data.current.pid, before.pid);
+  assert.equal(alive(before.pid), false);
+  assert.equal(data.endpoint, started.endpoint);
+  assertIdentity(await settledInfo(data.endpoint), {
+    version: NEW_VERSION,
+    endpoint: data.endpoint,
+    ui: null,
+  });
+  assert.equal((await entry(env, 'demo/worker')).state, 'stopped');
+  console.log('PASS published 0.1.3 management inspection and guarded upgrade to version 2');
 }
 
 async function checkPty() {
@@ -520,6 +623,7 @@ function taskDefinition(dir, hold, boot) {
           `require("fs").appendFileSync(${JSON.stringify(hold)}, "s"); setInterval(() => {}, 1000)`,
         ),
       },
+      peer: { command: sleepCommand() },
       boot: {
         command: nodeCommand(`require("fs").appendFileSync(${JSON.stringify(boot)}, "b")`),
         autostart: true,
@@ -549,6 +653,17 @@ async function waitForTask(env, hold, boot) {
       return false;
     }
   }, 'active task');
+  await json(oldCli, env, ['run', 'demo/peer', '--no-wait']);
+  await until(
+    async () => (await entry(env, 'demo/peer')).state === 'running',
+    'independent active task',
+  );
+  const info = await managerInfo(manager.endpoint);
+  assert.equal(info.impact.operations.length, 2, JSON.stringify(info.impact));
+  assert.deepEqual(
+    [...info.impact.taskIds].sort((left, right) => left.localeCompare(right)),
+    ['demo/hold', 'demo/peer'],
+  );
 }
 
 async function taskReplay() {
@@ -620,9 +735,17 @@ async function terminalCase(answer) {
   await json(oldCli, env, ['serve', '--background', '--port', '0']);
   await waitForTask(env, hold, boot);
   const before = await json(oldCli, env, ['manager', 'status']);
+  const impact = (await managerInfo(before.endpoint)).impact;
   const session = await terminal(newCli, ['manager', 'restart'], env, answer);
   assert.equal(session.sent, true, session.output);
   assert.equal(session.output.split(PROMPT).length - 1, 1, session.output);
+  for (const operation of impact.operations) {
+    assert.equal(
+      session.output.includes(`${operation.id} (${operation.action})`),
+      true,
+      session.output,
+    );
+  }
   assert.match(session.output, new RegExp(escapeRegExp(OLD_VERSION)));
   assert.match(session.output, new RegExp(escapeRegExp(NEW_VERSION)));
   const configPath = await realpath(env.SERVICEMON_CONFIG);
@@ -783,6 +906,8 @@ try {
   await exec('python3', ['-c', 'import pty'], { encoding: 'utf8' });
   await checkPty();
   await installTrees();
+  await installPublishedTree();
+  await publishedUpgrade();
   await scriptNotice();
   await customUi();
   await builtinUi();

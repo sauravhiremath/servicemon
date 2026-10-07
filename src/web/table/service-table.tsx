@@ -469,29 +469,6 @@ function EndpointLinks({ links }: { links: readonly string[] }) {
   );
 }
 
-function activeOperation(operation: Operation): boolean {
-  return operation.state === 'pending' || operation.state === 'running';
-}
-
-function entryOperation(operations: readonly Operation[], id: string): Operation | undefined {
-  return (
-    operations.find((operation) => activeOperation(operation) && operation.target.entry === id) ??
-    operations.find((operation) => activeOperation(operation) && operation.affected.includes(id))
-  );
-}
-
-function targetOperation(
-  operations: readonly Operation[],
-  kind: TargetKind,
-  id: string,
-): Operation | undefined {
-  return operations.find(
-    (operation) =>
-      activeOperation(operation) &&
-      (kind === 'projects' ? operation.target.project === id : operation.target.compose === id),
-  );
-}
-
 function RowControls({ row, meta }: { row: ServiceRow; meta: TableMeta }) {
   const entry = row.entry;
   const label = entryLabel(entry, row.projectName);
@@ -697,7 +674,12 @@ export function ServiceTable({
         },
       },
       meta: {
-        busy: (id) => entryOperation(operations, id),
+        busy: (id) =>
+          operations.find(
+            (operation) =>
+              (operation.state === 'pending' || operation.state === 'running') &&
+              (operation.scope === null || operation.scope.includes(id)),
+          ),
         onAction,
         onLogs,
         onDetails,
@@ -1047,6 +1029,7 @@ function groupedBody({
           kind="projects"
           id={entry.projectId}
           operations={operations}
+          entries={items}
           onTargetAction={onTargetAction}
           actionLabel={(action) =>
             `${action[0]!.toUpperCase()}${action.slice(1)} ${row.original.projectName} services`
@@ -1075,6 +1058,7 @@ function groupedBody({
             kind="compose-groups"
             id={entry.composeGroupId}
             operations={operations}
+            entries={items}
             onTargetAction={onTargetAction}
             actionLabel={(action) =>
               `${action[0]!.toUpperCase()}${action.slice(1)} Compose group ${name}`
@@ -1103,6 +1087,7 @@ function GroupHeader({
   kind,
   id,
   operations,
+  entries,
   onTargetAction,
   actionLabel,
 }: {
@@ -1115,10 +1100,17 @@ function GroupHeader({
   kind: TargetKind;
   id: string;
   operations: Operation[];
+  entries: readonly ServiceRow[];
   onTargetAction?: (kind: TargetKind, id: string, action: TargetAction) => void;
   actionLabel: (action: TargetAction) => string;
 }) {
-  const operation = targetOperation(operations, kind, id);
+  const operation = operations.find((item) => {
+    if (item.state !== 'pending' && item.state !== 'running') {
+      return false;
+    }
+    const scope = item.scope;
+    return scope === null || entries.some(({ entry }) => scope.includes(entry.id));
+  });
   const menuLabel =
     kind === 'projects' ? `Actions for ${name}` : `Actions for Compose group ${name}`;
   return (

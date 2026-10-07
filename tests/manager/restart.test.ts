@@ -80,11 +80,11 @@ it('keeps restart impact stable until entries, operations, or config change', as
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const operation = ops.enqueue('reload', {}, async () => {
+    const operation = ops.exclusive('reload', async () => {
       await gate;
     });
     const during = ops.impact();
-    expect(during.operation).toEqual({ id: operation.id, action: 'reload' });
+    expect(during.operations).toEqual([{ id: operation.id, action: 'reload' }]);
     expect(during.impactKey).not.toBe(withTask.impactKey);
     expect(ops.impact().impactKey).toBe(during.impactKey);
     ops.applyConfig(config('version: 1\nprojects: {}\n'), {});
@@ -263,7 +263,7 @@ it('waits for the active operation during shutdown and does not signal this proc
     identity,
   );
   try {
-    ops.enqueue('reload', {}, async () => {
+    ops.exclusive('reload', async () => {
       await gate;
       ran = true;
     });

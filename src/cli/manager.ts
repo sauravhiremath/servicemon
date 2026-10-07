@@ -34,8 +34,7 @@ const launchSettingsSchema = z.object({
   ui: z.string().nullable(),
   port: z.number().int().min(0).max(65535),
 });
-const managerInfoSchema = z.object({
-  managementVersion: z.literal(1),
+const managerInfoBaseSchema = z.object({
   version: z.string().min(1),
   applicationProtocol: z.number().int().nonnegative(),
   pid: z.number().int().positive(),
@@ -48,16 +47,39 @@ const managerInfoSchema = z.object({
     error: errorSchema.optional(),
   }),
   shutdown: z.object({ state: z.enum(['idle', 'stopping']) }),
-  impact: z.object({
-    processEntryIds: z.array(z.string()),
-    taskIds: z.array(z.string()),
-    operation: z.union([
-      z.null(),
-      z.object({ id: z.string().min(1), action: z.string().optional() }),
-    ]),
-    impactKey: z.string().min(1),
+});
+const impactBaseSchema = z.object({
+  processEntryIds: z.array(z.string()),
+  taskIds: z.array(z.string()),
+  impactKey: z.string().min(1),
+});
+const managerInfoV2Schema = managerInfoBaseSchema.extend({
+  managementVersion: z.literal(2),
+  impact: impactBaseSchema.extend({
+    operations: z.array(z.object({ id: z.string().min(1), action: z.string() })),
   }),
 });
+// Published 0.1.3 managers use version 1. Normalize only at the HTTP boundary.
+const managerInfoV1Schema = managerInfoBaseSchema.extend({
+  managementVersion: z.literal(1),
+  impact: impactBaseSchema.extend({
+    operation: z.object({ id: z.string().min(1), action: z.string().optional() }).nullable(),
+  }),
+});
+const managerInfoSchema = z.union([
+  managerInfoV2Schema,
+  managerInfoV1Schema.transform(({ impact, ...info }) => {
+    const { operation, ...rest } = impact;
+    return {
+      ...info,
+      managementVersion: 2 as const,
+      impact: {
+        ...rest,
+        operations: operation ? [{ id: operation.id, action: operation.action ?? '' }] : [],
+      },
+    };
+  }),
+]);
 
 type ManagerInfo = z.infer<typeof managerInfoSchema>;
 export interface Inspection {
@@ -272,7 +294,7 @@ async function askConsent(prompt: string): Promise<boolean> {
 }
 
 function restartPrompt(info: ManagerInfo): string {
-  const operation = info.impact.operation;
+  const operations = info.impact.operations;
   const dashboard = info.launchSettings.ui ?? 'built-in';
   return [
     'Restart the running manager?',
@@ -282,7 +304,7 @@ function restartPrompt(info: ManagerInfo): string {
     `Dashboard: ${dashboard}`,
     `Owned processes: ${info.impact.processEntryIds.join(', ') || 'none'}`,
     `Active tasks: ${info.impact.taskIds.join(', ') || 'none'}`,
-    `Active operation: ${operation ? `${operation.id}${operation.action ? ` (${operation.action})` : ''}` : 'none'}`,
+    `Active operations: ${operations.map(({ id, action }) => `${id}${action ? ` (${action})` : ''}`).join(', ') || 'none'}`,
     'Compose containers stay running.',
     'Only normal autostart runs after replacement.',
     'Task output and operation IDs do not make tasks safe to replay.',

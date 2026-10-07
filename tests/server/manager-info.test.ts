@@ -105,7 +105,7 @@ it('reports fixed build information, launch settings, and guarded shutdown', asy
     }
     const info = first.body.data;
     expect(info).toMatchObject({
-      managementVersion: 1,
+      managementVersion: 2,
       version: packageVersion,
       applicationProtocol,
       pid: process.pid,

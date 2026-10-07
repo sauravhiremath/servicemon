@@ -581,7 +581,12 @@ export function App() {
                 Copy config path
               </DropdownMenuItem>
               <DropdownMenuItem
-                disabled={reloadBusy}
+                disabled={
+                  reloadBusy ||
+                  operations.some(
+                    (operation) => operation.state === 'pending' || operation.state === 'running',
+                  )
+                }
                 onSelect={() =>
                   void runAction(async () => {
                     setReloadBusy(true);

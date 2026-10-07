@@ -26,7 +26,7 @@ Serve reuses the active manager for the same config. A different config conflict
 
 ### Version checks and manager restart
 
-Package installation does not replace a running manager. `manager status` reports `cliVersion`, `managerVersion`, `applicationProtocol`, `compatible`, and `restartRequired` without a restart prompt. A package-version difference does not by itself mean that the application protocol is incompatible. The same checks apply to upgrades and downgrades.
+Package installation does not replace a running manager. `manager status` reports `cliVersion`, `managerVersion`, `applicationProtocol`, `compatible`, and `restartRequired` without a restart prompt. A package-version difference does not by itself mean that the application protocol is incompatible. The current CLI reads management contracts 1 and 2, including a running 0.1.3 manager. Older CLIs can reject newer management contracts; stop the manager with the current CLI before such a downgrade.
 
 Before its first application request, each command checks the manager and selects one manager identity. It does not switch to another manager during polling or replay a request that it has already sent.
 
@@ -61,6 +61,8 @@ servicemon logs demo/api --follow --json
 ```
 
 Start, Stop, Restart, and targeted Status accept exactly one qualified entry ID, `--project <id>`, or `--compose <project/group>`. Status without a target shows all entries. Run requires one task ID; it does not accept `--project` or `--compose`. Actions wait for completion by default. `--no-wait` returns after acceptance with an operation ID. Acceptance is not success. Query `operation` until its state is `succeeded` or `failed`.
+
+Independent actions can run concurrently. Overlapping requests fail immediately with `OPERATION_BUSY` and exit code 5. Error details contain the blocking `operationId` and overlapping `entryIds`. Requests are not queued. An operation record has a `scope` array of reserved entry IDs and an `affected` array of entries where work was attempted. A null `scope` means exclusive config work. See [Operations](operations.md#failures) for dependency and Compose scope rules.
 
 Stop affects only its target. No action removes Compose volumes. Ctrl-C ends log follow, not the service. Tail counts must be non-negative integers. `--tail 0` prints no retained records; with `--follow`, it starts at the current log cursor and prints new records only.
 

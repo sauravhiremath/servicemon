@@ -18,9 +18,16 @@ import { topologicalOrder, validateGraphs } from './graphs.js';
 import type { ValidatedGraphs } from './graphs.js';
 import type { HealthMonitor } from './health.js';
 
+interface ActionPlan {
+  scope: string[];
+  stops: Entry[];
+  starts: { entry: Entry; forceTask: boolean }[];
+}
+
 export class Operations {
   readonly records = new Map<string, Operation>();
-  private active?: Operation;
+  private active = new Map<string, { operation: Operation; completion: Promise<Operation> }>();
+  private entries: Map<string, Entry>;
   private graphs: ValidatedGraphs;
   private stopping = false;
   private completedTasks = new Set<string>();
@@ -38,6 +45,7 @@ export class Operations {
     private changed: (operation?: Operation) => void,
     private identity?: { pid: number; startedAt: string },
   ) {
+    this.entries = new Map(config.entries.map((entry) => [entry.id, entry]));
     this.graphs = validateGraphs(config.entries);
   }
   status(entry: Entry): EntryStatus {
@@ -70,7 +78,7 @@ export class Operations {
     }
     return selected;
   }
-  submit(action: Action, target: Target): Operation {
+  private plan(action: Action, target: Target): ActionPlan {
     const selected = this.select(target);
     if (action === 'run' && (selected.length !== 1 || selected[0].kind !== 'task')) {
       throw new AppError('INVALID_TARGET', 'Run requires one task ID.');
@@ -78,180 +86,207 @@ export class Operations {
     if (action === 'restart' && target.entry && selected[0].kind === 'task') {
       throw new AppError('INVALID_TARGET', 'Use Run for a task.');
     }
-    return this.enqueue(action, target, async (operation) => {
-      const done = new Set<string>();
-      const affected = (id: string) => {
-        if (!operation.affected.includes(id)) {
-          operation.affected.push(id);
-        }
-      };
-      const start = async (entry: Entry, forceTask = false): Promise<void> => {
-        if (this.stopping) {
-          throw new AppError('MANAGER_STOPPING', 'Manager is stopping.');
-        }
-        if (done.has(entry.id)) {
-          return;
-        }
-        for (const id of entry.dependsOn) {
-          await start(this.config.entries.find((item) => item.id === id)!);
-        }
-        if (this.stopping) {
-          throw new AppError('MANAGER_STOPPING', 'Manager is stopping.');
-        }
-        if (entry.kind === 'task' && this.completedTasks.has(entry.id) && !forceTask) {
-          done.add(entry.id);
-          return;
-        }
-        affected(entry.id);
-        const adapter = this.adapter(entry);
-        const previous = adapter.status(entry.id);
-        if (entry.kind === 'task') {
-          if (forceTask || !this.completedTasks.has(entry.id)) {
-            this.completedTasks.delete(entry.id);
-            if (previous.state !== 'running') {
-              await adapter.start(entry, this.environment);
-            }
-            const result = await this.adapters.process.waitTask(entry.id);
-            if (result.state !== 'succeeded') {
-              throw new AppError(
-                'TASK_FAILED',
-                `Task ${entry.id} did not succeed.`,
-                result.exit,
-                entry.id,
-              );
-            }
-            this.completedTasks.add(entry.id);
-          }
-        } else {
-          if (!['running', 'starting'].includes(previous.state)) {
-            await adapter.start(entry, this.environment);
-          }
-          if (entry.kind === 'service' && entry.healthcheck) {
-            this.health.watch(entry);
-          }
-          const deadline = Date.now() + entry.readinessSeconds * 1000;
-          while (true) {
-            if (this.stopping) {
-              throw new AppError('MANAGER_STOPPING', 'Manager is stopping.');
-            }
-            const current = adapter.status(entry.id);
-            if (!['starting', 'running'].includes(current.state)) {
-              throw new AppError(
-                'PROCESS_EXITED',
-                `Prerequisite ${entry.id} is not running.`,
-                current.exit,
-                entry.id,
-              );
-            }
-            const ready =
-              entry.kind === 'service' && entry.healthcheck
-                ? await this.health.check(entry)
-                : await adapter.ready(entry);
-            if (ready) {
-              break;
-            }
-            if (Date.now() >= deadline) {
-              throw new AppError(
-                'READINESS_TIMEOUT',
-                `Readiness timed out for ${entry.id}.`,
-                undefined,
-                entry.id,
-              );
-            }
-            await delay(Math.min(100, Math.max(1, deadline - Date.now())));
-          }
-        }
-        done.add(entry.id);
-        this.changed(operation);
-      };
-      if (action === 'stop') {
-        for (const id of topologicalOrder(
-          selected.map((e) => e.id),
-          this.graphs.startup,
-        ).reverse()) {
-          const entry = this.config.entries.find((e) => e.id === id)!;
-          affected(id);
-          this.health.unwatch(id);
-          await this.adapter(entry).stop(entry);
-          if (entry.kind === 'task') {
-            this.completedTasks.delete(id);
-          }
-        }
-      } else if (action === 'restart') {
-        const roots = target.entry
-          ? selected
-          : selected.filter(
-              (e) =>
-                e.kind !== 'task' &&
-                ['running', 'starting'].includes(this.adapter(e).status(e.id).state),
-            );
-        const included = new Set<string>();
-        const include = (id: string): void => {
-          if (included.has(id)) {
-            return;
-          }
-          included.add(id);
-          for (const next of this.graphs.restart.get(id) ?? []) {
-            include(next);
-          }
-        };
-        for (const entry of roots) {
-          include(entry.id);
-        }
-        const active = new Set(
-          [...included].filter((id) =>
-            ['running', 'starting'].includes(
-              this.adapter(this.config.entries.find((e) => e.id === id)!).status(id).state,
-            ),
-          ),
-        );
-        const order = topologicalOrder([...included], this.graphs.startup);
-        for (const id of order.slice().reverse()) {
-          if (active.has(id)) {
-            const entry = this.config.entries.find((e) => e.id === id)!;
-            affected(id);
-            this.health.unwatch(id);
-            await this.adapter(entry).stop(entry);
-          }
-        }
-        for (const id of order) {
-          if (active.has(id) || roots.some((e) => e.id === id)) {
-            await start(this.config.entries.find((e) => e.id === id)!);
-          }
-        }
-      } else {
-        for (const entry of selected) {
-          await start(
-            entry,
-            entry.kind === 'task' && (action === 'run' || Boolean(target.project)),
+    const scope = new Set(selected.map((entry) => entry.id));
+    const starts: ActionPlan['starts'] = [];
+    const planned = new Set<string>();
+    const start = (entry: Entry, forceTask = false): void => {
+      if (planned.has(entry.id)) {
+        return;
+      }
+      planned.add(entry.id);
+      scope.add(entry.id);
+      for (const id of entry.dependsOn) {
+        start(this.entries.get(id)!);
+      }
+      starts.push({ entry, forceTask });
+    };
+    let stops: Entry[] = [];
+    if (action === 'stop') {
+      stops = topologicalOrder([...scope], this.graphs.startup)
+        .reverse()
+        .map((id) => this.entries.get(id)!);
+    } else if (action === 'restart') {
+      const roots = target.entry
+        ? selected
+        : selected.filter(
+            (entry) =>
+              entry.kind !== 'task' &&
+              ['running', 'starting'].includes(this.adapter(entry).status(entry.id).state),
           );
+      const included = new Set<string>();
+      const include = (id: string): void => {
+        if (included.has(id)) {
+          return;
         }
+        included.add(id);
+        scope.add(id);
+        for (const next of this.graphs.restart.get(id) ?? []) {
+          include(next);
+        }
+      };
+      for (const entry of roots) {
+        include(entry.id);
+      }
+      const order = topologicalOrder([...included], this.graphs.startup).map((id) =>
+        this.entries.get(id)!,
+      );
+      stops = order.filter((entry) =>
+        ['running', 'starting'].includes(this.adapter(entry).status(entry.id).state),
+      );
+      for (const entry of order) {
+        if (stops.includes(entry) || roots.includes(entry)) {
+          start(entry);
+        }
+      }
+      stops.reverse();
+    } else {
+      for (const entry of selected) {
+        start(entry, entry.kind === 'task' && (action === 'run' || Boolean(target.project)));
+      }
+    }
+    // Compose create can also create native prerequisites in the same group.
+    const groups = new Set<string>();
+    for (const id of scope) {
+      const group = this.entries.get(id)!.composeGroupId;
+      if (group) {
+        groups.add(group);
+      }
+    }
+    for (const entry of this.config.entries) {
+      if (entry.composeGroupId && groups.has(entry.composeGroupId)) {
+        scope.add(entry.id);
+      }
+    }
+    return { scope: [...scope].sort(), stops, starts };
+  }
+  submit(action: Action, target: Target): Operation {
+    const plan = this.plan(action, target);
+    return this.admit(action, target, plan.scope, async (operation) => {
+      for (const entry of plan.stops) {
+        operation.affected.push(entry.id);
+        this.health.unwatch(entry.id);
+        await this.adapter(entry).stop(entry);
+        if (entry.kind === 'task') {
+          this.completedTasks.delete(entry.id);
+        }
+      }
+      for (const { entry, forceTask } of plan.starts) {
+        await this.start(entry, forceTask, operation);
       }
     });
   }
-  enqueue(
+  private async start(entry: Entry, forceTask: boolean, operation: Operation): Promise<void> {
+    if (this.stopping) {
+      throw new AppError('MANAGER_STOPPING', 'Manager is stopping.');
+    }
+    if (entry.kind === 'task' && this.completedTasks.has(entry.id) && !forceTask) {
+      return;
+    }
+    if (!operation.affected.includes(entry.id)) {
+      operation.affected.push(entry.id);
+    }
+    const adapter = this.adapter(entry);
+    const previous = adapter.status(entry.id);
+    if (entry.kind === 'task') {
+      this.completedTasks.delete(entry.id);
+      if (previous.state !== 'running') {
+        await adapter.start(entry, this.environment);
+      }
+      const result = await this.adapters.process.waitTask(entry.id);
+      if (result.state !== 'succeeded') {
+        throw new AppError(
+          'TASK_FAILED',
+          `Task ${entry.id} did not succeed.`,
+          result.exit,
+          entry.id,
+        );
+      }
+      this.completedTasks.add(entry.id);
+    } else {
+      if (!['running', 'starting'].includes(previous.state)) {
+        await adapter.start(entry, this.environment);
+      }
+      if (this.stopping) {
+        throw new AppError('MANAGER_STOPPING', 'Manager is stopping.');
+      }
+      if (entry.kind === 'service' && entry.healthcheck) {
+        this.health.watch(entry);
+      }
+      const deadline = Date.now() + entry.readinessSeconds * 1000;
+      while (true) {
+        if (this.stopping) {
+          throw new AppError('MANAGER_STOPPING', 'Manager is stopping.');
+        }
+        const current = adapter.status(entry.id);
+        if (!['starting', 'running'].includes(current.state)) {
+          throw new AppError(
+            'PROCESS_EXITED',
+            `Prerequisite ${entry.id} is not running.`,
+            current.exit,
+            entry.id,
+          );
+        }
+        const ready =
+          entry.kind === 'service' && entry.healthcheck
+            ? await this.health.check(entry)
+            : await adapter.ready(entry);
+        if (ready) {
+          break;
+        }
+        if (Date.now() >= deadline) {
+          throw new AppError(
+            'READINESS_TIMEOUT',
+            `Readiness timed out for ${entry.id}.`,
+            undefined,
+            entry.id,
+          );
+        }
+        await delay(Math.min(100, Math.max(1, deadline - Date.now())));
+      }
+    }
+    this.changed(operation);
+  }
+  exclusive(
+    action: 'reload' | 'config-edit',
+    execute: (operation: Operation) => Promise<void>,
+  ): Operation {
+    return this.admit(action, {}, null, execute);
+  }
+  private admit(
     action: string,
     target: Target,
+    scope: string[] | null,
     execute: (operation: Operation) => Promise<void>,
   ): Operation {
     if (this.stopping) {
       throw new AppError('MANAGER_STOPPING', 'Manager is stopping.');
     }
-    if (this.active) {
-      throw new AppError('OPERATION_BUSY', 'Another operation is active.', {
-        operationId: this.active.id,
-      });
+    for (const { operation } of this.active.values()) {
+      const entryIds =
+        scope === null
+          ? (operation.scope ?? [])
+          : operation.scope === null
+            ? scope
+            : scope.filter((id) => operation.scope!.includes(id));
+      if (scope === null || operation.scope === null || entryIds.length > 0) {
+        throw new AppError('OPERATION_BUSY', 'Another operation reserves this scope.', {
+          operationId: operation.id,
+          entryIds,
+        });
+      }
     }
     const operation: Operation = {
       id: randomUUID(),
       action,
       target,
       state: 'pending',
+      scope,
       affected: [],
       startedAt: new Date().toISOString(),
     };
+    const completion = Promise.withResolvers<Operation>();
     this.records.set(operation.id, operation);
-    this.active = operation;
+    this.active.set(operation.id, { operation, completion: completion.promise });
     this.changed(operation);
     void (async () => {
       operation.state = 'running';
@@ -264,7 +299,8 @@ export class Operations {
         operation.error = { ...errorData(error), operationId: operation.id };
       } finally {
         operation.finishedAt = new Date().toISOString();
-        this.active = undefined;
+        this.active.delete(operation.id);
+        completion.resolve(operation);
         this.changed(operation);
       }
     })();
@@ -275,10 +311,7 @@ export class Operations {
     if (!operation) {
       throw new AppError('INVALID_INPUT', 'Unknown operation ID.');
     }
-    while (['pending', 'running'].includes(operation.state)) {
-      await delay(25);
-    }
-    return operation;
+    return this.active.get(id)?.completion ?? operation;
   }
   applyConfig(config: CompiledConfig, environment: NodeJS.ProcessEnv): void {
     const old = new Map(this.config.entries.map((e) => [e.id, e]));
@@ -340,6 +373,7 @@ export class Operations {
       }
     }
     this.config = config;
+    this.entries = new Map(config.entries.map((entry) => [entry.id, entry]));
     this.environment = environment;
     this.graphs = validateGraphs(config.entries);
     this.adapters.process.update?.(config.entries.filter((e) => e.kind !== 'compose'));
@@ -403,19 +437,21 @@ export class Operations {
     }
     processEntryIds.sort();
     taskIds.sort();
-    const operation = this.active ? { id: this.active.id, action: this.active.action } : null;
+    const operations = [...this.active.values()]
+      .map(({ operation }) => ({ id: operation.id, action: operation.action }))
+      .sort((left, right) => left.id.localeCompare(right.id));
     const impactKey = createHash('sha256')
       .update(
         JSON.stringify({
           processEntryIds,
           taskIds,
-          operation,
+          operations,
           configPath: this.config.path,
           configSource: this.config.source,
         }),
       )
       .digest('hex');
-    return { processEntryIds, taskIds, operation, impactKey };
+    return { processEntryIds, taskIds, operations, impactKey };
   }
   admitShutdown(expected?: ShutdownExpectation): void {
     if (this.stopping) {
@@ -458,9 +494,7 @@ export class Operations {
     await this.health.shutdown();
     try {
       await this.adapters.process.shutdown();
-      if (this.active) {
-        await this.wait(this.active.id);
-      }
+      await Promise.all([...this.active.values()].map(({ completion }) => completion));
     } finally {
       await this.adapters.compose.shutdown();
     }

@@ -149,7 +149,7 @@ export async function startManager(options: ManagerOptions): Promise<string> {
     await compose.refresh();
     subscribeLogs();
     const reload = (edit?: unknown): Operation =>
-      operations!.enqueue(edit === undefined ? 'reload' : 'config-edit', {}, async (operation) => {
+      operations!.exclusive(edit === undefined ? 'reload' : 'config-edit', async (operation) => {
         try {
           const source = edit === undefined ? undefined : await readFile(options.config, 'utf8');
           const proposed = edit === undefined ? undefined : proposedEdit(source!, edit);
@@ -175,7 +175,7 @@ export async function startManager(options: ManagerOptions): Promise<string> {
         }
       });
     const info = (): ManagerInfo => ({
-      managementVersion: 1,
+      managementVersion: 2,
       version: packageVersion,
       applicationProtocol,
       pid: lock.record.pid,
