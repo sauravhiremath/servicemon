@@ -523,7 +523,6 @@ export function App() {
       onTargetAction={requestTargetAction}
       onLogs={(id) => void openLogs(id)}
       onDetails={setDetailsId}
-      pageResetKey={`${projectId}:${query}`}
     />
   ) : null;
 

@@ -1,7 +1,5 @@
 import type { ComposeGroup, EntryState, EntryStatus, Health } from '../shared/types.js';
 
-export const PAGE_SIZE = 20;
-
 export const STATE_LABEL: Record<EntryState, string> = {
   stopped: 'Stopped',
   starting: 'Starting',

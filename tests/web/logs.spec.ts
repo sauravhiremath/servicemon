@@ -87,10 +87,9 @@ test('keeps the last row controls reachable with the log panel open', async ({ p
     await page.goto(manager.url);
     await page.getByRole('button', { name: 'Logs for Fixture A/talker' }).click();
     await expect(page.getByRole('separator', { name: 'Resize log panel' })).toBeVisible();
-    await page.getByRole('button', { name: 'Next page' }).click();
     const last = page.getByRole('button', { name: 'Logs for Fixture B/svc-21' });
     await last.scrollIntoViewIfNeeded();
-    await expect(last).toBeVisible();
+    await expect(last).toBeInViewport();
     await page.getByRole('button', { name: 'Hide log panel' }).click();
     await expect(page.getByRole('region', { name: 'Service logs' })).toHaveCount(0);
   }

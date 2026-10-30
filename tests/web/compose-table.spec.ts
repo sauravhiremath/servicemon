@@ -1,7 +1,7 @@
 import type { EntryStatus, Snapshot } from '../../src/shared/types.js';
 import { expect, test } from './manager.js';
 
-test('collapses Compose members without hiding project services and shares pages and search', async ({
+test('orders and collapses Compose members and shares scrolling and search', async ({
   page,
   manager,
 }) => {
@@ -20,6 +20,7 @@ test('collapses Compose members without hiding project services and shares pages
         key: name,
         name,
         kind: 'compose',
+        state: index === 1 ? 'running' : 'stopped',
         composeGroupId: 'fixture-b/infra',
         composeService: name,
       };
@@ -48,6 +49,14 @@ test('collapses Compose members without hiding project services and shares pages
   });
   await page.goto(manager.url);
   const table = page.getByRole('table', { name: 'Services and tasks', exact: true });
+  await expect(table.locator('tr[data-group="projects"]').first()).toHaveAttribute(
+    'data-group-id',
+    'fixture-b',
+  );
+  await expect(table.getByRole('button', { name: /^Details for / }).first()).toHaveAccessibleName(
+    'Details for Fixture B/compose-02',
+  );
+  await expect(table.locator('tr[data-group="compose-groups"]')).toHaveCount(1);
   await page.getByRole('combobox', { name: 'Project' }).click();
   await page.getByRole('option', { name: 'Fixture B' }).click();
   const service = table.getByRole('button', { name: 'Details for Fixture B/svc-21', exact: true });
@@ -71,8 +80,10 @@ test('collapses Compose members without hiding project services and shares pages
 
   await page.getByRole('combobox', { name: 'Project' }).click();
   await page.getByRole('option', { name: 'All projects' }).click();
-  await page.getByRole('button', { name: 'Next page', exact: true }).click();
-  await expect(page.getByText('21–25 of 25 entries')).toBeVisible();
+  await expect(table.getByRole('button', { name: /^Details for / })).toHaveCount(25);
+  await expect(page.getByRole('button', { name: 'Next page', exact: true })).toHaveCount(0);
+  await service.scrollIntoViewIfNeeded();
+  await expect(service).toBeInViewport();
   await expect(service).toBeVisible();
   await page.getByLabel('Search services and tasks').fill('compose-01');
   await expect(member).toBeVisible();
@@ -88,7 +99,7 @@ test('collapses Compose members without hiding project services and shares pages
     .click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('compose.yaml');
   await expect(page.getByRole('status').filter({ hasText: /^Copied to clipboard$/ })).toBeVisible();
-  await expect(page.getByText('1–1 of 1 entries')).toBeVisible();
+  await expect(table.getByRole('button', { name: /^Details for / })).toHaveCount(1);
   await page.getByLabel('Search services and tasks').fill('svc-21');
   await expect(service).toBeVisible();
   await expect(member).toHaveCount(0);

@@ -11,7 +11,6 @@ import {
   columnVisibilityFeature,
   filterFn_includesString,
   globalFilteringFeature,
-  rowPaginationFeature,
   rowSortingFeature,
   sortFn_alphanumeric,
   sortFn_text,
@@ -28,7 +27,6 @@ import {
   ArrowUpIcon,
   BoxIcon,
   ChevronDownIcon,
-  ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
   FolderIcon,
@@ -42,7 +40,7 @@ import {
   TerminalIcon,
   ScrollTextIcon,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Action, EntryState, EntryStatus, Operation, Snapshot } from '../../shared/types.js';
 import { Button } from '../components/button.js';
 import {
@@ -56,7 +54,6 @@ import {
   HEALTH_LABEL,
   HEALTH_OPTIONS,
   KIND_LABEL,
-  PAGE_SIZE,
   STATE_LABEL,
   STATE_OPTIONS,
   TYPE_OPTIONS,
@@ -77,6 +74,7 @@ import {
   type FilterColumn,
   type FilterOption,
 } from './filters.js';
+import { orderServiceRows } from './order.js';
 
 export type ServiceRow = {
   entry: EntryStatus;
@@ -103,7 +101,6 @@ const features = tableFeatures({
   columnSizingFeature,
   columnVisibilityFeature,
   globalFilteringFeature,
-  rowPaginationFeature,
   rowSortingFeature,
   filteredRowModel: createFilteredRowModel(),
   facetedRowModel: createFacetedRowModel(),
@@ -114,12 +111,6 @@ const features = tableFeatures({
 });
 
 const helper = createColumnHelper<typeof features, ServiceRow>();
-const GROUPED_SORT: SortingState = [
-  { id: 'project', desc: false },
-  { id: 'projectId', desc: false },
-  { id: 'composeGroup', desc: false },
-  { id: 'name', desc: false },
-];
 
 const TONE_TEXT: Record<StatusTone, string> = {
   neutral: 'text-muted-foreground',
@@ -151,10 +142,6 @@ function asFilterColumn(column: {
   getFacetedUniqueValues?: () => Map<unknown, number>;
 }): FilterColumn {
   return column as FilterColumn;
-}
-
-function resetPage(table: { setPageIndex: (index: number) => void }): void {
-  table.setPageIndex(0);
 }
 
 function columnTitle(
@@ -207,12 +194,7 @@ const columns = helper.columns([
       columnTitle(
         'Service / task',
         context,
-        <TextFilter
-          compact
-          column={asFilterColumn(context.column)}
-          title="Service / task"
-          onChange={() => resetPage(context.table)}
-        />,
+        <TextFilter compact column={asFilterColumn(context.column)} title="Service / task" />,
       ),
     cell: (context) => {
       const row = context.row.original;
@@ -257,7 +239,6 @@ const columns = helper.columns([
           column={asFilterColumn(context.column)}
           title="Type"
           options={TYPE_OPTIONS}
-          onChange={() => resetPage(context.table)}
         />,
       ),
     cell: (context) => <span className="type-label">{KIND_LABEL[context.getValue()]}</span>,
@@ -278,7 +259,6 @@ const columns = helper.columns([
           column={asFilterColumn(context.column)}
           title="Project"
           options={projectOptions(context.table.getPreFilteredRowModel().rows)}
-          onChange={() => resetPage(context.table)}
         />,
       ),
     cell: (context) => <span className="text-muted-foreground">{context.getValue()}</span>,
@@ -287,28 +267,6 @@ const columns = helper.columns([
     enableGlobalFilter: false,
     size: 142,
     minSize: 85,
-  }),
-  helper.accessor((row) => row.entry.projectId, {
-    id: 'projectId',
-    header: () => null,
-    enableColumnFilter: false,
-    enableGlobalFilter: false,
-    enableHiding: false,
-    enableResizing: false,
-    enableSorting: true,
-    sortFn: 'text',
-    size: 0,
-  }),
-  helper.accessor((row) => row.entry.composeGroupId ?? '', {
-    id: 'composeGroup',
-    header: () => null,
-    enableColumnFilter: false,
-    enableGlobalFilter: false,
-    enableHiding: false,
-    enableResizing: false,
-    enableSorting: true,
-    sortFn: 'text',
-    size: 0,
   }),
   helper.accessor((row) => row.entry.state, {
     id: 'state',
@@ -321,7 +279,6 @@ const columns = helper.columns([
           column={asFilterColumn(context.column)}
           title="State"
           options={STATE_OPTIONS}
-          onChange={() => resetPage(context.table)}
         />,
       ),
     cell: (context) => <StateMark state={context.getValue()} />,
@@ -342,7 +299,6 @@ const columns = helper.columns([
           column={asFilterColumn(context.column)}
           title="Health"
           options={HEALTH_OPTIONS}
-          onChange={() => resetPage(context.table)}
         />,
       ),
     cell: (context) => (
@@ -362,12 +318,7 @@ const columns = helper.columns([
       columnTitle(
         'Endpoint',
         context,
-        <TextFilter
-          compact
-          column={asFilterColumn(context.column)}
-          title="Endpoint"
-          onChange={() => resetPage(context.table)}
-        />,
+        <TextFilter compact column={asFilterColumn(context.column)} title="Endpoint" />,
       ),
     cell: (context) => <EndpointLinks links={context.row.original.entry.links} />,
     filterFn: filterFn_includesString,
@@ -382,12 +333,7 @@ const columns = helper.columns([
       columnTitle(
         'Cmd / Compose file',
         context,
-        <TextFilter
-          compact
-          column={asFilterColumn(context.column)}
-          title="Cmd / Compose file"
-          onChange={() => resetPage(context.table)}
-        />,
+        <TextFilter compact column={asFilterColumn(context.column)} title="Cmd / Compose file" />,
       ),
     cell: (context) =>
       context.getValue() ? (
@@ -557,7 +503,6 @@ export function ServiceTable({
   onAction,
   onLogs,
   onDetails,
-  pageResetKey,
   groups = [],
   onTargetAction,
 }: {
@@ -569,7 +514,6 @@ export function ServiceTable({
   onAction: (id: string, action: Action) => void;
   onLogs: (id: string) => void;
   onDetails: (id: string) => void;
-  pageResetKey: string;
   groups?: Snapshot['groups'];
   onTargetAction?: (kind: TargetKind, id: string, action: TargetAction) => void;
 }) {
@@ -580,12 +524,14 @@ export function ServiceTable({
   });
   const [copyNotice, setCopyNotice] = useState<{ message: string } | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
+  const orderedRows = useMemo(
+    () => orderServiceRows(rows, operations, grouped),
+    [rows, operations, grouped],
+  );
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const columnVisibility = {
     ...visibleColumns,
     project: grouped ? false : visibleColumns.project !== false,
-    projectId: false,
-    composeGroup: false,
   };
   useEffect(() => {
     if (!copyNotice) {
@@ -606,10 +552,9 @@ export function ServiceTable({
   const table = useTable(
     {
       features,
-      data: rows,
+      data: orderedRows,
       columns,
       getRowId: (row) => row.entry.id,
-      autoResetPageIndex: false,
       enableColumnResizing: true,
       columnResizeMode: 'onChange',
       enableSortingRemoval: true,
@@ -635,7 +580,7 @@ export function ServiceTable({
           .toLowerCase()
           .includes(query);
       },
-      state: { globalFilter, sorting: grouped ? GROUPED_SORT : sorting, columnVisibility },
+      state: { globalFilter, sorting: grouped ? [] : sorting, columnVisibility },
       onColumnVisibilityChange: (updater) => {
         setVisibleColumns((current) => {
           const next =
@@ -643,8 +588,6 @@ export function ServiceTable({
               ? updater({
                   ...current,
                   project: grouped ? false : current.project !== false,
-                  projectId: false,
-                  composeGroup: false,
                 })
               : updater;
           return { ...next, project: grouped ? current.project : next.project };
@@ -661,7 +604,6 @@ export function ServiceTable({
         setSorting((current) => (typeof updater === 'function' ? updater(current) : updater));
       },
       initialState: {
-        pagination: { pageIndex: 0, pageSize: PAGE_SIZE },
         columnSizing: {
           name: 190,
           type: 96,
@@ -690,7 +632,6 @@ export function ServiceTable({
       },
     },
     (state) => ({
-      pagination: state.pagination,
       columnFilters: state.columnFilters,
       columnSizing: state.columnSizing,
       sorting: state.sorting,
@@ -698,22 +639,8 @@ export function ServiceTable({
     }),
   );
 
-  const tableRef = useRef(table);
-  tableRef.current = table;
-  useEffect(() => {
-    tableRef.current.setPageIndex(0);
-  }, [pageResetKey]);
-
   const sortedRows = table.getSortedRowModel().rows;
   const filtered = sortedRows.length;
-  const pageCount = Math.ceil(filtered / PAGE_SIZE);
-  const pageIndex = Math.min(table.state.pagination.pageIndex, Math.max(0, pageCount - 1));
-  if (pageIndex !== table.state.pagination.pageIndex) {
-    table.setPageIndex(pageIndex);
-  }
-  const visible = sortedRows.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE);
-  const start = filtered === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
-  const end = Math.min(filtered, (pageIndex + 1) * PAGE_SIZE);
   const columnCount = table.getVisibleLeafColumns().length;
   const projectRows = rowsBy(sortedRows, (row) => row.original.entry.projectId);
   const composeRows = rowsBy(
@@ -722,7 +649,7 @@ export function ServiceTable({
   );
   const body = grouped
     ? groupedBody({
-        visible,
+        visible: sortedRows,
         collapsed,
         columnCount,
         projectRows,
@@ -733,18 +660,16 @@ export function ServiceTable({
         onToggle: toggleCollapsed,
         selectedId,
       })
-    : visible.map((row) => (
+    : sortedRows.map((row) => (
         <DataRow key={row.id} row={row} selected={selectedId === row.original.entry.id} />
       ));
 
   function selectOnly(columnId: 'state' | 'type', value: string | undefined) {
     table.getColumn(columnId)?.setFilterValue(value ? [value] : undefined);
-    table.setPageIndex(0);
   }
 
   function changeView(next: boolean) {
     setGrouped(next);
-    table.setPageIndex(0);
   }
 
   function toggleCollapsed(key: string) {
@@ -790,7 +715,6 @@ export function ServiceTable({
               size="sm"
               onClick={() => {
                 table.resetColumnFilters();
-                table.setPageIndex(0);
               }}
             >
               Clear column filters
@@ -876,7 +800,6 @@ export function ServiceTable({
                   onClick={() => {
                     onGlobalFilter('');
                     table.resetColumnFilters();
-                    table.setPageIndex(0);
                   }}
                 >
                   Clear search and filters
@@ -884,39 +807,6 @@ export function ServiceTable({
               ) : null}
             </div>
           ) : null}
-          <footer className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-2.5 text-xs">
-            <span className="text-muted-foreground">
-              {filtered === 0 ? '0 entries' : `${start}–${end} of ${filtered} entries`}
-            </span>
-            {pageCount > 1 ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground">20 per page</span>
-                <span>
-                  Page {pageIndex + 1} of {pageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label="Previous page"
-                  disabled={pageIndex === 0}
-                  onClick={() => table.setPageIndex(pageIndex - 1)}
-                >
-                  <ChevronLeftIcon />
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label="Next page"
-                  disabled={pageIndex + 1 >= pageCount}
-                  onClick={() => table.setPageIndex(pageIndex + 1)}
-                >
-                  Next
-                  <ChevronRightIcon />
-                </Button>
-              </div>
-            ) : null}
-          </footer>
         </div>
       </div>
       <div

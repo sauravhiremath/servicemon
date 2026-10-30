@@ -25,20 +25,17 @@ export function FacetedFilter({
   column,
   title,
   options,
-  onChange,
   compact = false,
 }: {
   column: FilterColumn;
   title: string;
   options: readonly FilterOption[];
-  onChange: () => void;
   compact?: boolean;
 }) {
   const selected = new Set((column.getFilterValue() as string[] | undefined) ?? []);
   const facets = column.getFacetedUniqueValues();
   const apply = (next: Set<string>) => {
     column.setFilterValue(next.size ? [...next] : undefined);
-    onChange();
   };
   return (
     <Popover>
@@ -116,12 +113,10 @@ export function FacetedFilter({
 export function TextFilter({
   column,
   title,
-  onChange,
   compact = false,
 }: {
   column: FilterColumn;
   title: string;
-  onChange: () => void;
   compact?: boolean;
 }) {
   const value = (column.getFilterValue() as string | undefined) ?? '';
@@ -151,7 +146,6 @@ export function TextFilter({
             aria-label={`${title} text`}
             onChange={(event) => {
               column.setFilterValue(event.target.value || undefined);
-              onChange();
             }}
           />
         </label>

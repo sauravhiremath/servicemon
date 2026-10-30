@@ -9,15 +9,22 @@ test.beforeEach(async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 });
 
-test('combines search, project selection, column filters, and 20-row pages', async ({
+test('combines search, project selection, column filters, and continuous scrolling', async ({
   page,
   manager,
 }) => {
   await page.goto(manager.url);
   await expect(page.getByRole('heading', { name: 'All services and tasks' })).toBeVisible();
-  await expect(page.getByText('20 per page')).toBeVisible();
-  await expect(page.getByText(/1–20 of \d+ entries/)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Next page' })).toBeEnabled();
+  const table = page.getByRole('table', { name: 'Services and tasks', exact: true });
+  await expect(table.getByRole('button', { name: /^Details for / })).toHaveCount(23);
+  await expect(page.getByRole('button', { name: 'Next page' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Previous page' })).toHaveCount(0);
+  const last = page.getByRole('button', { name: 'Logs for Fixture B/svc-21', exact: true });
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeInViewport();
+  expect(
+    await page.locator('[data-region="table-scroll"]').evaluate((el) => el.scrollTop),
+  ).toBeGreaterThan(0);
 
   await page.getByRole('combobox', { name: 'Project' }).click();
   await page.getByRole('option', { name: 'Fixture B' }).click();
@@ -30,14 +37,58 @@ test('combines search, project selection, column filters, and 20-row pages', asy
   await page.getByLabel('Search services and tasks').fill('svc-21');
   await expect(page.getByRole('button', { name: 'Logs for Fixture B/svc-21' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Logs for Fixture A/talker' })).toHaveCount(0);
-  await expect(page.getByText('1–1 of 1 entries')).toBeVisible();
+  await expect(table.getByRole('button', { name: /^Details for / })).toHaveCount(1);
 
   await page.getByLabel('Search services and tasks').fill('');
-  await page.getByRole('button', { name: 'Next page' }).click();
-  await expect(page.getByText(/Page 2 of/)).toBeVisible();
   await page.getByRole('button', { name: 'Filter State' }).click();
   await page.getByRole('checkbox', { name: 'Running' }).click();
   await expect(page.getByText('No matching services or tasks.')).toBeVisible();
+});
+
+test('keeps active and recent entries first across live actions, reload, and manual sorting', async ({
+  page,
+  manager,
+  installedCli,
+}) => {
+  const exec = promisify(execFile);
+  const cli = (...args: string[]) =>
+    exec(process.execPath, [installedCli, ...args], {
+      env: {
+        ...process.env,
+        SERVICEMON_CONFIG: manager.configPath,
+        SERVICEMON_STATE_DIR: manager.stateDir,
+      },
+    });
+  await page.goto(manager.url);
+  const table = page.getByRole('table', { name: 'Services and tasks', exact: true });
+  const entries = table.getByRole('button', { name: /^Details for / });
+  const projects = table.locator('tr[data-group="projects"]');
+  await cli('start', 'fixture-b/svc-21');
+  await expect(entries.first()).toHaveAccessibleName('Details for Fixture B/svc-21');
+  await expect(projects.first()).toHaveAttribute('data-group-id', 'fixture-b');
+  await page.getByRole('button', { name: 'Start Fixture B/svc-20', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Stop Fixture B/svc-20', exact: true }),
+  ).toBeEnabled();
+  await expect(entries.first()).toHaveAccessibleName('Details for Fixture B/svc-20');
+  await page.getByRole('button', { name: 'Stop Fixture B/svc-20', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Start Fixture B/svc-20', exact: true }),
+  ).toBeEnabled();
+  await expect(entries.nth(0)).toHaveAccessibleName('Details for Fixture B/svc-21');
+  await expect(entries.nth(1)).toHaveAccessibleName('Details for Fixture B/svc-20');
+  await page.reload();
+  await expect(entries.first()).toHaveAccessibleName('Details for Fixture B/svc-21');
+  await page.getByRole('button', { name: 'Ungrouped', exact: true }).click();
+  await expect(entries.first()).toHaveAccessibleName('Details for Fixture B/svc-21');
+  await page.getByRole('button', { name: 'Sort Service / task', exact: true }).click();
+  await expect(entries.first()).toHaveAccessibleName('Details for Fixture A/once');
+  await page.getByRole('button', { name: 'Sort Service / task ascending', exact: true }).click();
+  await expect(entries.first()).toHaveAccessibleName('Details for Fixture A/talker');
+  await page.getByRole('button', { name: 'Sort Service / task descending', exact: true }).click();
+  await expect(entries.first()).toHaveAccessibleName('Details for Fixture B/svc-21');
+  await page.getByRole('button', { name: 'Grouped', exact: true }).click();
+  await expect(projects.first()).toHaveAttribute('data-group-id', 'fixture-b');
 });
 
 test('toggles a group from its row without toggling from the Actions menu', async ({
